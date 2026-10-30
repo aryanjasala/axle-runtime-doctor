@@ -1,0 +1,240 @@
+/* Tools > Runtime Doctor. */
+
+.ard-summary {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px 24px;
+	margin: 16px 0;
+	padding: 12px 16px;
+	border: 1px solid #c3c4c7;
+	background: #fff;
+}
+
+.ard-counts {
+	display: flex;
+	gap: 16px;
+	margin: 0;
+}
+
+.ard-count {
+	margin: 0;
+	font-size: 14px;
+}
+
+.ard-count-number {
+	font-size: 22px;
+	font-weight: 600;
+	margin-inline-end: 4px;
+}
+
+.ard-count--critical .ard-count-number {
+	color: #b32d2e;
+}
+
+.ard-count--recommended .ard-count-number {
+	color: #8a4d00;
+}
+
+.ard-count--good .ard-count-number {
+	color: #00702e;
+}
+
+.ard-host details,
+.ard-evidence {
+	margin-top: 4px;
+}
+
+.ard-run-form {
+	margin-inline-start: auto;
+}
+
+.ard-running .spinner {
+	float: none;
+	margin: 0 6px 0 0;
+}
+
+.ard-group {
+	margin-top: 24px;
+}
+
+.ard-check {
+	margin: 0 0 8px;
+	padding: 12px 16px;
+	border: 1px solid #c3c4c7;
+	border-inline-start-width: 4px;
+	background: #fff;
+}
+
+.ard-check--critical {
+	border-inline-start-color: #d63638;
+}
+
+.ard-check--recommended {
+	border-inline-start-color: #dba617;
+}
+
+.ard-check--good {
+	border-inline-start-color: #00a32a;
+}
+
+.ard-check--info {
+	border-inline-start-color: #72aee6;
+}
+
+.ard-check-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 4px 12px;
+}
+
+.ard-check-title {
+	margin: 0;
+	font-size: 14px;
+}
+
+.ard-check-summary {
+	flex-basis: 100%;
+	margin: 4px 0 0;
+}
+
+.ard-badge {
+	display: inline-block;
+	padding: 1px 8px;
+	border-radius: 2px;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.8;
+	color: #fff;
+	background: #50575e;
+}
+
+.ard-badge--critical {
+	background: #b32d2e;
+}
+
+.ard-badge--recommended {
+	color: #1d2327;
+	background: #f0c33c;
+}
+
+.ard-badge--good {
+	background: #00702e;
+}
+
+.ard-badge--info {
+	background: #2271b1;
+}
+
+.ard-inferred,
+.ard-flag {
+	font-style: italic;
+	color: #50575e;
+}
+
+.ard-values {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 24px;
+	margin: 8px 0;
+}
+
+.ard-values div {
+	display: flex;
+	gap: 6px;
+}
+
+.ard-values dt {
+	font-weight: 600;
+}
+
+.ard-values dd {
+	margin: 0;
+}
+
+.ard-check details {
+	margin-top: 6px;
+}
+
+.ard-check summary {
+	cursor: pointer;
+	color: #2271b1;
+}
+
+.ard-check summary:focus {
+	outline: 2px solid #2271b1;
+	outline-offset: 1px;
+}
+
+.ard-ticket-label {
+	display: block;
+	margin-top: 8px;
+	font-weight: 600;
+}
+
+.ard-ticket {
+	font-family: Consolas, Monaco, monospace;
+	font-size: 12px;
+}
+
+.ard-autoload {
+	margin: 10px 0;
+}
+
+.ard-autoload caption {
+	text-align: start;
+	font-weight: 600;
+	padding: 6px 0;
+}
+
+.ard-inline-form {
+	display: inline;
+}
+
+.ard-spark {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
+	margin: 0;
+	list-style: none;
+}
+
+.ard-spark-dot {
+	width: 10px;
+	height: 18px;
+	margin: 0;
+	background: #c3c4c7;
+}
+
+.ard-spark-dot--good {
+	background: #00a32a;
+}
+
+.ard-spark-dot--info {
+	background: #72aee6;
+}
+
+.ard-spark-dot--recommended {
+	background: #dba617;
+}
+
+.ard-spark-dot--critical {
+	background: #d63638;
+}
+
+tr.ard-regressed th,
+tr.ard-regressed td {
+	background: #fcf0f1;
+}
+
+.ard-slow .ard-sql {
+	display: block;
+	white-space: pre-wrap;
+	word-break: break-word;
+	font-size: 12px;
+}
+
+.ard-empty {
+	color: #50575e;
+}

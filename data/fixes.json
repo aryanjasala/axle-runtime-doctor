@@ -1,0 +1,668 @@
+{
+	"_ticket": "Hello,\n\nOn {site} the runtime check says: {summary}.\n\nMeasured: {value}\nExpected: {expected}\n{details}\nCould you {ask}? Please let me know what you changed, so I can run the check again.\n\nThanks",
+	"opcache_enabled": {
+		"ask": "turn on OPcache for this site",
+		"generic": {
+			"setting": "opcache.enable=1",
+			"where": "php.ini or a file in the PHP conf.d folder",
+			"steps": [
+				"Install or enable the opcache extension (zend_extension=opcache).",
+				"Set opcache.enable=1 and restart PHP."
+			]
+		},
+		"cpanel": {
+			"setting": "opcache.enable=1",
+			"where": "cPanel > Select PHP Version > Extensions",
+			"steps": [
+				"Tick opcache under Extensions.",
+				"If the extension list is not there, ask the host to enable OPcache."
+			]
+		}
+	},
+	"opcache_coverage": {
+		"ask": "make OPcache cache the files under wp-content too, for example by removing wp-content from the OPcache blacklist (opcache.blacklist_filename) or the policy that excludes it",
+		"generic": {
+			"setting": "opcache.blacklist_filename",
+			"where": "The blacklist file named in php.ini, or the host's OPcache policy",
+			"steps": [
+				"Open the file opcache.blacklist_filename points to and remove the line that matches wp-content.",
+				"Check that opcache.file_cache_only is 0.",
+				"Restart PHP so OPcache rereads the blacklist."
+			]
+		},
+		"apache": {
+			"setting": "opcache.blacklist_filename",
+			"where": "php.ini or /etc/php/*/apache2/conf.d/",
+			"steps": [
+				"Remove the wp-content line from the blacklist file and reload Apache (apachectl graceful)."
+			]
+		},
+		"nginx": {
+			"setting": "opcache.blacklist_filename",
+			"where": "The PHP-FPM php.ini or conf.d folder",
+			"steps": [
+				"Remove the wp-content line from the blacklist file and reload PHP-FPM (systemctl reload php8.x-fpm)."
+			]
+		},
+		"pressable": {
+			"setting": "OPcache policy for wp-content",
+			"where": "Pressable support (MyPressable Control Panel > Support)",
+			"steps": [
+				"Pressable manages OPcache for you. Ask support to include wp-content in OPcache for this site. Paste the support ticket."
+			]
+		},
+		"wpengine": {
+			"setting": "OPcache policy for wp-content",
+			"where": "WP Engine User Portal > Support",
+			"steps": [
+				"Ask support to check the setting below. Paste the support ticket."
+			]
+		},
+		"kinsta": {
+			"setting": "OPcache policy for wp-content",
+			"where": "MyKinsta > Help (chat)",
+			"steps": [
+				"Ask support to check the setting below. Paste the support ticket."
+			]
+		},
+		"wpcom": {
+			"setting": "OPcache policy for wp-content",
+			"where": "WordPress.com Help (chat)",
+			"steps": [
+				"Ask support to check the setting below. Paste the support ticket."
+			]
+		},
+		"vip": {
+			"setting": "OPcache policy for wp-content",
+			"where": "WordPress VIP support ticket",
+			"steps": [
+				"Ask support to check the setting below. Paste the support ticket."
+			]
+		},
+		"pantheon": {
+			"setting": "OPcache policy for wp-content",
+			"where": "Pantheon Dashboard > Support",
+			"steps": [
+				"Ask support to check the setting below. Paste the support ticket."
+			]
+		},
+		"godaddy": {
+			"setting": "OPcache policy for wp-content",
+			"where": "GoDaddy support",
+			"steps": [
+				"Ask support to check the setting below. Paste the support ticket."
+			]
+		},
+		"flywheel": {
+			"setting": "OPcache policy for wp-content",
+			"where": "Flywheel support chat",
+			"steps": [
+				"Ask support to check the setting below. Paste the support ticket."
+			]
+		},
+		"siteground": {
+			"setting": "OPcache policy for wp-content",
+			"where": "SiteGround Help Center > Contact us",
+			"steps": [
+				"Ask support to check the setting below. Paste the support ticket."
+			]
+		},
+		"cloudways": {
+			"setting": "opcache.blacklist_filename",
+			"where": "Cloudways support, or the server's PHP settings over SSH",
+			"steps": [
+				"Ask support to check the setting below. Paste the support ticket."
+			]
+		},
+		"cpanel": {
+			"setting": "opcache.blacklist_filename",
+			"where": "cPanel > MultiPHP INI Editor, or the host",
+			"steps": [
+				"Look for opcache.blacklist_filename in the editor and remove the wp-content entry from that file, or ask the host to do it."
+			]
+		}
+	},
+	"opcache_memory": {
+		"ask": "raise opcache.memory_consumption for this site (to 256 MB, or what the server allows)",
+		"generic": {
+			"setting": "opcache.memory_consumption=256",
+			"where": "php.ini or the PHP conf.d folder",
+			"steps": [
+				"Raise opcache.memory_consumption (in MB), for example to 256.",
+				"Restart PHP."
+			]
+		},
+		"cpanel": {
+			"setting": "opcache.memory_consumption",
+			"where": "cPanel > Select PHP Version > Options",
+			"steps": [
+				"Raise opcache.memory_consumption, or ask the host."
+			]
+		},
+		"plesk": {
+			"setting": "opcache.memory_consumption",
+			"where": "Plesk > Websites & Domains > PHP Settings > Additional directives",
+			"steps": [
+				"Add opcache.memory_consumption=256."
+			]
+		}
+	},
+	"opcache_strings": {
+		"ask": "raise opcache.interned_strings_buffer for this site, for example to 32 MB",
+		"generic": {
+			"setting": "opcache.interned_strings_buffer=32",
+			"where": "php.ini or the PHP conf.d folder",
+			"steps": [
+				"Raise opcache.interned_strings_buffer (in MB), for example to 16 or 32.",
+				"Restart PHP."
+			]
+		}
+	},
+	"opcache_keys": {
+		"ask": "raise opcache.max_accelerated_files for this site to at least {data.suggested}",
+		"generic": {
+			"setting": "opcache.max_accelerated_files",
+			"where": "php.ini or the PHP conf.d folder",
+			"steps": [
+				"Set opcache.max_accelerated_files above the number of PHP files (the measured value says how many).",
+				"Restart PHP."
+			]
+		}
+	},
+	"opcache_restarts": {
+		"ask": "give OPcache more memory and file slots (opcache.memory_consumption, opcache.interned_strings_buffer and opcache.max_accelerated_files), as it keeps running out of room",
+		"generic": {
+			"setting": "opcache.memory_consumption, opcache.max_accelerated_files",
+			"where": "php.ini or the PHP conf.d folder",
+			"steps": [
+				"Raise opcache.memory_consumption and opcache.max_accelerated_files until the restart counters stay at 0.",
+				"Restart PHP."
+			]
+		}
+	},
+	"opcache_hit_rate": {
+		"ask": "look at why OPcache misses often: memory, file slots and opcache.revalidate_freq",
+		"generic": {
+			"setting": "opcache.memory_consumption, opcache.revalidate_freq",
+			"where": "php.ini or the PHP conf.d folder",
+			"steps": [
+				"Fix the other OPcache rows first: memory, strings and file slots.",
+				"Set opcache.revalidate_freq to 2 or more on production."
+			]
+		}
+	},
+	"opcache_revalidate": {
+		"ask": "confirm that OPcache is flushed on every deploy and plugin update, as opcache.validate_timestamps is off",
+		"generic": {
+			"setting": "opcache.validate_timestamps",
+			"where": "php.ini, and your deploy script",
+			"steps": [
+				"Either set opcache.validate_timestamps=1 with opcache.revalidate_freq=2,",
+				"or keep it off and reload PHP-FPM (or call opcache_reset() in a web request) after every deploy and update."
+			]
+		}
+	},
+	"object_cache_dropin": {
+		"ask": "set the Redis maxmemory-policy to allkeys-lru (or volatile-lru) for this site's cache",
+		"generic": {
+			"setting": "maxmemory-policy allkeys-lru",
+			"where": "redis.conf, or the Redis service settings",
+			"steps": [
+				"Set maxmemory-policy to allkeys-lru so Redis drops old keys when full instead of refusing writes."
+			]
+		}
+	},
+	"object_cache_roundtrip": {
+		"ask": "check the object cache backend (Redis or Memcached) for this site: the drop-in is installed but values do not survive from one request to the next",
+		"generic": {
+			"setting": "Redis or Memcached service",
+			"where": "wp-content/object-cache.php and the cache service",
+			"steps": [
+				"Check that the cache service runs and the drop-in can connect (host, port, password in wp-config.php).",
+				"Look at the drop-in's own status screen or WP-CLI command for errors.",
+				"If you no longer use it, delete wp-content/object-cache.php."
+			]
+		},
+		"kinsta": {
+			"setting": "Redis add-on",
+			"where": "MyKinsta > Sites > Add-ons > Redis",
+			"steps": [
+				"Check the Redis add-on is active, or ask support."
+			]
+		},
+		"cloudways": {
+			"setting": "Redis service",
+			"where": "Cloudways > Server > Manage Services > Redis",
+			"steps": [
+				"Start Redis if it is stopped, then check the drop-in's settings."
+			]
+		},
+		"siteground": {
+			"setting": "Memcached",
+			"where": "Site Tools > Speed > Caching > Memcached",
+			"steps": [
+				"Turn Memcached on again, or remove the drop-in."
+			]
+		},
+		"wpengine": {
+			"setting": "Object cache",
+			"where": "WP Engine User Portal > environment > Cache",
+			"steps": [
+				"Check the object cache setting, or ask support. Paste the support ticket."
+			]
+		},
+		"pressable": {
+			"setting": "Object cache",
+			"where": "Pressable support",
+			"steps": [
+				"Ask support to check the setting below. Paste the support ticket."
+			]
+		}
+	},
+	"object_cache_hit_rate": {
+		"ask": "check whether the object cache is too small or flushed often (maxmemory, evictions)",
+		"generic": {
+			"setting": "maxmemory, eviction",
+			"where": "The cache service settings",
+			"steps": [
+				"Give the cache more memory if it evicts keys.",
+				"Look for plugins that flush the whole cache often."
+			]
+		}
+	},
+	"php_branch": {
+		"ask": "move this site to PHP {data.newest} (or another branch that still gets security fixes)",
+		"generic": {
+			"setting": "PHP version",
+			"where": "The host's control panel or the server's PHP packages",
+			"steps": [
+				"Test the site on a newer PHP branch on staging first, then switch production."
+			]
+		},
+		"wpengine": {
+			"setting": "PHP version",
+			"where": "WP Engine User Portal > environment > PHP version",
+			"steps": [
+				"Pick a newer version, after testing on staging."
+			]
+		},
+		"kinsta": {
+			"setting": "PHP engine",
+			"where": "MyKinsta > Sites > Tools > PHP engine",
+			"steps": [
+				"Pick a newer version, after testing on staging."
+			]
+		},
+		"pressable": {
+			"setting": "PHP version",
+			"where": "MyPressable Control Panel > site > Settings",
+			"steps": [
+				"Pick a newer version, after testing on staging."
+			]
+		},
+		"siteground": {
+			"setting": "PHP version",
+			"where": "Site Tools > Devs > PHP Manager",
+			"steps": [
+				"Pick a newer version, after testing on staging."
+			]
+		},
+		"cloudways": {
+			"setting": "PHP version",
+			"where": "Cloudways > Server > Settings & Packages > Packages",
+			"steps": [
+				"Pick a newer version, after testing on staging."
+			]
+		},
+		"hostinger": {
+			"setting": "PHP version",
+			"where": "hPanel > Advanced > PHP Configuration",
+			"steps": [
+				"Pick a newer version, after testing on staging."
+			]
+		},
+		"cpanel": {
+			"setting": "PHP version",
+			"where": "cPanel > MultiPHP Manager, or Select PHP Version",
+			"steps": [
+				"Pick a newer version, after testing on staging."
+			]
+		},
+		"plesk": {
+			"setting": "PHP version",
+			"where": "Plesk > Websites & Domains > PHP Settings",
+			"steps": [
+				"Pick a newer version, after testing on staging."
+			]
+		}
+	},
+	"php_patch": {
+		"ask": "update PHP to {data.latest}, the latest patch release of this branch",
+		"generic": {
+			"setting": "PHP patch release",
+			"where": "The server's PHP packages",
+			"steps": [
+				"Update the PHP packages (apt, yum or the host's panel) and restart PHP."
+			]
+		}
+	},
+	"php_memory": {
+		"ask": "raise memory_limit for this site to at least 256M",
+		"generic": {
+			"setting": "memory_limit=256M",
+			"where": "php.ini, .user.ini or wp-config.php",
+			"steps": [
+				"Raise memory_limit in php.ini (or .user.ini).",
+				"Set WP_MEMORY_LIMIT and WP_MAX_MEMORY_LIMIT in wp-config.php to what you need. WordPress can only raise it up to what PHP allows."
+			]
+		},
+		"cpanel": {
+			"setting": "memory_limit",
+			"where": "cPanel > MultiPHP INI Editor",
+			"steps": [
+				"Raise memory_limit."
+			]
+		},
+		"siteground": {
+			"setting": "memory_limit",
+			"where": "Site Tools > Devs > PHP Manager > PHP Variables",
+			"steps": [
+				"Raise memory_limit."
+			]
+		},
+		"hostinger": {
+			"setting": "memory_limit",
+			"where": "hPanel > Advanced > PHP Configuration > PHP options",
+			"steps": [
+				"Raise memory_limit."
+			]
+		},
+		"plesk": {
+			"setting": "memory_limit",
+			"where": "Plesk > Websites & Domains > PHP Settings",
+			"steps": [
+				"Raise memory_limit."
+			]
+		}
+	},
+	"php_execution_time": {
+		"ask": "raise max_execution_time for this site to at least 60 seconds",
+		"generic": {
+			"setting": "max_execution_time=60",
+			"where": "php.ini or .user.ini",
+			"steps": [
+				"Raise max_execution_time. On nginx, also check fastcgi_read_timeout."
+			]
+		},
+		"cpanel": {
+			"setting": "max_execution_time",
+			"where": "cPanel > MultiPHP INI Editor",
+			"steps": [
+				"Raise max_execution_time."
+			]
+		}
+	},
+	"php_input_vars": {
+		"ask": "raise max_input_vars for this site to {data.suggested}, as the menu \"{data.menu}\" has {data.items} items",
+		"generic": {
+			"setting": "max_input_vars",
+			"where": "php.ini or .user.ini",
+			"steps": [
+				"Raise max_input_vars above the number in Expected.",
+				"Restart PHP, or wait for .user.ini to be reread (5 minutes by default)."
+			]
+		},
+		"cpanel": {
+			"setting": "max_input_vars",
+			"where": "cPanel > MultiPHP INI Editor",
+			"steps": [
+				"Raise max_input_vars."
+			]
+		},
+		"siteground": {
+			"setting": "max_input_vars",
+			"where": "Site Tools > Devs > PHP Manager > PHP Variables",
+			"steps": [
+				"Raise max_input_vars."
+			]
+		},
+		"hostinger": {
+			"setting": "max_input_vars",
+			"where": "hPanel > Advanced > PHP Configuration > PHP options",
+			"steps": [
+				"Raise max_input_vars."
+			]
+		},
+		"plesk": {
+			"setting": "max_input_vars",
+			"where": "Plesk > Websites & Domains > PHP Settings",
+			"steps": [
+				"Raise max_input_vars."
+			]
+		}
+	},
+	"php_uploads": {
+		"ask": "set post_max_size at least as high as upload_max_filesize",
+		"generic": {
+			"setting": "post_max_size",
+			"where": "php.ini or .user.ini",
+			"steps": [
+				"Set post_max_size a little higher than upload_max_filesize."
+			]
+		}
+	},
+	"php_display_errors": {
+		"ask": "turn off display_errors on this production site and log errors instead",
+		"generic": {
+			"setting": "display_errors=Off",
+			"where": "php.ini, .user.ini or wp-config.php",
+			"steps": [
+				"Set display_errors=Off and log_errors=On in php.ini.",
+				"Or in wp-config.php: define( 'WP_DEBUG_DISPLAY', false ); and @ini_set( 'display_errors', '0' );"
+			]
+		}
+	},
+	"php_realpath": {
+		"ask": "raise realpath_cache_size for this site, for example to 4096K",
+		"generic": {
+			"setting": "realpath_cache_size=4096K",
+			"where": "php.ini",
+			"steps": [
+				"Raise realpath_cache_size (and realpath_cache_ttl to 600).",
+				"Restart PHP."
+			]
+		}
+	},
+	"db_autoload": {
+		"ask": "help turn autoload off for the large options listed",
+		"generic": {
+			"setting": "autoload",
+			"where": "This screen, or WP-CLI",
+			"steps": [
+				"Use Turn autoload off on the options you do not need on every page.",
+				"Or: wp axle-runtime-doctor autoload off <option>",
+				"Delete options from plugins you removed (Axle Leftovers can do it with an undo)."
+			]
+		}
+	},
+	"db_slow_queries": {
+		"ask": "look at the slow queries listed, as they run on key pages",
+		"generic": {
+			"setting": "Slow queries",
+			"where": "The Slow queries tab",
+			"steps": [
+				"Find the component that sends each slow query.",
+				"Update or replace that plugin, or add the index it needs. A persistent object cache hides many of them."
+			]
+		}
+	},
+	"db_myisam": {
+		"ask": "convert the MyISAM tables listed to InnoDB",
+		"generic": {
+			"setting": "ENGINE=InnoDB",
+			"where": "The database (WP-CLI or phpMyAdmin)",
+			"steps": [
+				"Back up first.",
+				"Then for each table: wp db query \"ALTER TABLE <table> ENGINE=InnoDB\""
+			]
+		}
+	},
+	"db_primary_keys": {
+		"ask": "add primary keys to the tables listed",
+		"generic": {
+			"setting": "PRIMARY KEY",
+			"where": "The database",
+			"steps": [
+				"Check which plugin owns each table and update it; most plugins add a key in a later version.",
+				"Back up before changing tables by hand."
+			]
+		}
+	},
+	"db_version": {
+		"ask": "upgrade the database server to a supported MySQL or MariaDB release",
+		"generic": {
+			"setting": "Database server version",
+			"where": "The host's control panel or the server packages",
+			"steps": [
+				"Upgrade to a supported release after a backup and a test on staging."
+			]
+		}
+	},
+	"cron_mode": {
+		"ask": "add a real cron job for this site that runs WP-Cron every 5 minutes, as DISABLE_WP_CRON is set and nothing runs due events",
+		"generic": {
+			"setting": "A server cron job",
+			"where": "crontab -e on the server",
+			"steps": [
+				"Add: */5 * * * * wget -q -O - {site}/wp-cron.php?doing_wp_cron > /dev/null 2>&1",
+				"Or with WP-CLI: */5 * * * * cd /path/to/site && wp cron event run --due-now > /dev/null 2>&1",
+				"Or remove DISABLE_WP_CRON from wp-config.php."
+			]
+		},
+		"cpanel": {
+			"setting": "Cron job",
+			"where": "cPanel > Cron Jobs",
+			"steps": [
+				"Add a job every 5 minutes that calls wp-cron.php (command in the generic fix)."
+			]
+		},
+		"plesk": {
+			"setting": "Scheduled task",
+			"where": "Plesk > Websites & Domains > Scheduled Tasks",
+			"steps": [
+				"Add a task every 5 minutes that fetches {site}/wp-cron.php."
+			]
+		},
+		"hostinger": {
+			"setting": "Cron job",
+			"where": "hPanel > Advanced > Cron Jobs",
+			"steps": [
+				"Add a job every 5 minutes that calls wp-cron.php."
+			]
+		},
+		"siteground": {
+			"setting": "Cron job",
+			"where": "Site Tools > Devs > Cron Jobs",
+			"steps": [
+				"Add a job every 5 minutes that calls wp-cron.php."
+			]
+		},
+		"cloudways": {
+			"setting": "Cron job",
+			"where": "Cloudways > Application > Cron Job Management",
+			"steps": [
+				"Add a job every 5 minutes that calls wp-cron.php."
+			]
+		},
+		"wpengine": {
+			"setting": "Alternate cron",
+			"where": "WP Engine User Portal > environment > Utilities, or support",
+			"steps": [
+				"Ask support to turn on their alternate cron for this environment. Paste the support ticket."
+			]
+		},
+		"kinsta": {
+			"setting": "Server cron",
+			"where": "MyKinsta > Help (chat)",
+			"steps": [
+				"Ask support to set up a server cron for wp-cron.php. Paste the support ticket."
+			]
+		}
+	},
+	"cron_events": {
+		"ask": "help remove duplicate cron events",
+		"generic": {
+			"setting": "Duplicate events",
+			"where": "WP-CLI",
+			"steps": [
+				"List them: wp cron event list --fields=hook,next_run_relative,args",
+				"Delete extras: wp cron event delete <hook>, then let the plugin schedule it once again.",
+				"Update the plugin that schedules them, as it schedules without checking first."
+			]
+		}
+	},
+	"loopback": {
+		"ask": "let the server reach the site directly (for example through a hosts entry pointing the site's domain to 127.0.0.1), or allow the server's own IP past the firewall",
+		"generic": {
+			"setting": "Loopback route",
+			"where": "The CDN or firewall rules, or /etc/hosts on the server",
+			"steps": [
+				"Allow the server's own IP in the firewall or CDN bot rules.",
+				"Or point the site's domain to 127.0.0.1 in /etc/hosts on the server, so loopback requests stay local."
+			]
+		}
+	},
+	"fs_config": {
+		"ask": "set wp-config.php to mode 640 (or 600)",
+		"generic": {
+			"setting": "chmod 640 wp-config.php",
+			"where": "Over SSH or SFTP",
+			"steps": [
+				"chmod 640 wp-config.php (or 600 when PHP runs as the file owner)."
+			]
+		}
+	},
+	"fs_uploads_php": {
+		"ask": "help investigate the PHP files found in the uploads folder",
+		"generic": {
+			"setting": "PHP files in uploads",
+			"where": "Over SSH or SFTP",
+			"steps": [
+				"Take a backup for evidence, then look at each file. If you did not put it there, treat the site as hacked: change passwords and salts, update everything, remove the files.",
+				"Block PHP in uploads in the web server config."
+			]
+		}
+	},
+	"fs_ownership": {
+		"ask": "make PHP run as the user that owns the WordPress files (or change the owner to that user)",
+		"generic": {
+			"setting": "File owner",
+			"where": "Over SSH",
+			"steps": [
+				"chown -R <php-user>:<group> on the WordPress folder, or run PHP-FPM as the file owner.",
+				"Remove FS_METHOD from wp-config.php once they match."
+			]
+		}
+	},
+	"fs_content_writable": {
+		"ask": "make wp-content writable for PHP, or confirm that it is read-only on purpose",
+		"generic": {
+			"setting": "wp-content permissions",
+			"where": "Over SSH or SFTP",
+			"steps": [
+				"Make wp-content writable for the PHP user (755 for folders, owned by that user)."
+			]
+		}
+	},
+	"fs_disk": {
+		"ask": "add disk space to this site or help find what fills it",
+		"generic": {
+			"setting": "Disk space",
+			"where": "The host's control panel or the server",
+			"steps": [
+				"Look for old backups, logs and caches under wp-content first.",
+				"Add space if the site really needs it."
+			]
+		}
+	}
+}

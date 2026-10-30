@@ -1,0 +1,61 @@
+{
+	"$comment": "PHP branch support dates from php.net/supported-versions.php. Refreshed each release; filter: axle_runtime_doctor_php_versions.",
+	"updated": "2026-10-30",
+	"branches": {
+		"7.0": {
+			"released": "2015-12-03",
+			"active": "2017-12-03",
+			"security": "2019-01-10"
+		},
+		"7.1": {
+			"released": "2016-12-01",
+			"active": "2018-12-01",
+			"security": "2019-12-01"
+		},
+		"7.2": {
+			"released": "2017-11-30",
+			"active": "2019-11-30",
+			"security": "2020-11-30"
+		},
+		"7.3": {
+			"released": "2018-12-06",
+			"active": "2020-12-06",
+			"security": "2021-12-06"
+		},
+		"7.4": {
+			"released": "2019-11-28",
+			"active": "2021-11-28",
+			"security": "2022-11-28"
+		},
+		"8.0": {
+			"released": "2020-11-26",
+			"active": "2022-11-26",
+			"security": "2023-11-26"
+		},
+		"8.1": {
+			"released": "2021-11-25",
+			"active": "2023-11-25",
+			"security": "2025-12-31"
+		},
+		"8.2": {
+			"released": "2022-12-08",
+			"active": "2024-12-31",
+			"security": "2026-12-31"
+		},
+		"8.3": {
+			"released": "2023-11-23",
+			"active": "2025-12-31",
+			"security": "2027-12-31"
+		},
+		"8.4": {
+			"released": "2024-11-21",
+			"active": "2026-12-31",
+			"security": "2028-12-31"
+		},
+		"8.5": {
+			"released": "2025-11-20",
+			"active": "2027-12-31",
+			"security": "2029-12-31"
+		}
+	}
+}
