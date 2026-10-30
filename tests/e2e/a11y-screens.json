@@ -1,0 +1,251 @@
+{
+	"$comment": "Screens tests/e2e/a11y.spec.js checks with axe-core. This file belongs to the plugin: apply-template.py only writes it when it is missing. The fields are described in docs/DEVELOPMENT.md.",
+	"include": [
+		"#wpbody-content"
+	],
+	"exclude": [],
+	"screens": [
+		{
+			"name": "Runtime Doctor, all checks run",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"wp": [
+						"axle-runtime-doctor",
+						"check"
+					],
+					"mayFail": true
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor",
+			"steps": [
+				{
+					"waitFor": ".ard-summary"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Runtime Doctor, with critical results and every row expanded",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"wp": [
+						"axle-runtime-doctor",
+						"check"
+					],
+					"mayFail": true
+				},
+				[
+					"eval",
+					"$r = get_option( 'axle_runtime_doctor_report' ); $r['results']['opcache_coverage']['status'] = 'critical'; $r['results']['opcache_coverage']['summary'] = 'OPcache is skipping wp-content'; $r['results']['opcache_coverage']['details'][] = 'opcache.blacklist_filename: \"/var/www/html/wp-content/*\" in /usr/local/etc/php/ard-blacklist.txt (line 1) matches wp-content'; $r['results']['object_cache_roundtrip']['status'] = 'critical'; $r['results']['object_cache_roundtrip']['summary'] = 'The object cache forgets everything between requests'; $r['results']['php_input_vars']['status'] = 'recommended'; $r['results']['php_input_vars']['summary'] = 'Saving the menu \"Big footer\" (1200 items) loses items'; $r['counts'] = AryanX\\Axle\\RuntimeDoctor\\Runner::counts( $r['results'] ); update_option( 'axle_runtime_doctor_report', $r, false );"
+				]
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor",
+			"steps": [
+				{
+					"waitFor": "#ard-check-opcache_coverage.ard-check--critical"
+				},
+				{
+					"evaluate": "document.querySelectorAll( '.ard-wrap details' ).forEach( ( d ) => { d.open = true; } )"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Runtime Doctor, checks running",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"wp": [
+						"axle-runtime-doctor",
+						"check"
+					],
+					"mayFail": true
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor",
+			"steps": [
+				{
+					"waitFor": ".ard-run"
+				},
+				{
+					"evaluate": "window.wp.apiFetch = () => new Promise( () => {} )"
+				},
+				{
+					"click": ".ard-run"
+				},
+				{
+					"waitFor": ".ard-running:not([hidden])"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Runtime Doctor, history before any run",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=history",
+			"steps": [
+				{
+					"waitFor": ".ard-empty"
+				}
+			]
+		},
+		{
+			"name": "Runtime Doctor, history with a regression",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"wp": [
+						"axle-runtime-doctor",
+						"check"
+					],
+					"mayFail": true
+				},
+				[
+					"eval",
+					"$s = get_option( 'axle_runtime_doctor_snapshots' ); $first = $s[0]; $first['time'] -= DAY_IN_SECONDS; $first['results']['fs_config']['status'] = 'good'; $first['regressions'] = array(); $s[0]['regressions'] = array( 'fs_config' ); update_option( 'axle_runtime_doctor_snapshots', array( $first, $s[0] ), false );"
+				]
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=history",
+			"steps": [
+				{
+					"waitFor": ".ard-history-checks tr.ard-regressed"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Runtime Doctor, slow queries",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"wp": [
+						"axle-runtime-doctor",
+						"check"
+					],
+					"mayFail": true
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=slow-queries",
+			"steps": [
+				{
+					"waitFor": ".ard-slow"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Runtime Doctor, settings",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=settings",
+			"steps": [
+				{
+					"waitFor": "#ard-host"
+				}
+			]
+		},
+		{
+			"name": "Regression notice on the dashboard",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				[
+					"eval",
+					"update_option( 'axle_runtime_doctor_notice', array( 'time' => time(), 'regressions' => array( array( 'id' => 'opcache_coverage', 'label' => 'OPcache coverage', 'before' => 'good', 'after' => 'critical', 'summary' => 'OPcache is skipping wp-content' ) ) ), false );"
+				]
+			],
+			"url": "/wp-admin/index.php",
+			"include": [
+				".axle-runtime-doctor-notice"
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		}
+	],
+	"skip": {}
+}
