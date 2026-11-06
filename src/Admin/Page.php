@@ -181,9 +181,39 @@ final class Page implements Service {
 	 * The stylesheet and the script.
 	 */
 	public function enqueue(): void {
-		wp_enqueue_style( 'axle-runtime-doctor-admin', plugins_url( 'assets/admin.css', PLUGIN_FILE ), array(), VERSION );
+		AxleUi::enqueue();
+		wp_enqueue_style( 'axle-runtime-doctor-admin', plugins_url( 'assets/admin.css', PLUGIN_FILE ), array( AxleUi::HANDLE ), VERSION );
 		wp_enqueue_script( 'axle-runtime-doctor-admin', plugins_url( 'assets/admin.js', PLUGIN_FILE ), array( 'wp-hooks', 'wp-api-fetch', 'wp-i18n' ), VERSION, true );
 		wp_set_script_translations( 'axle-runtime-doctor-admin', 'axle-runtime-doctor' );
+	}
+
+	/**
+	 * A status as a badge.
+	 *
+	 * @param string $status critical, recommended, good or info.
+	 * @return string HTML.
+	 */
+	private static function badge( string $status ): string {
+		$tones = array(
+			Result::CRITICAL    => 'error',
+			Result::RECOMMENDED => 'warning',
+			Result::GOOD        => 'good',
+		);
+
+		return '<span class="axle-badge axle-badge--' . esc_attr( $tones[ $status ] ?? 'info' ) . ' ard-badge">' . esc_html( Result::status_label( $status ) ) . '</span>';
+	}
+
+	/**
+	 * A timestamp as relative time, with the exact time on hover.
+	 *
+	 * @param int $time Unix time.
+	 * @return string HTML.
+	 */
+	private static function time( int $time ): string {
+		/* translators: %s: a time span such as "5 minutes". */
+		$text = sprintf( __( '%s ago', 'axle-runtime-doctor' ), human_time_diff( $time ) );
+
+		return '<time datetime="' . esc_attr( gmdate( 'c', $time ) ) . '" title="' . esc_attr( wp_date( (string) get_option( 'date_format' ) . ' ' . (string) get_option( 'time_format' ), $time ) ) . '">' . esc_html( $text ) . '</time>';
 	}
 
 	/**
@@ -214,8 +244,22 @@ final class Page implements Service {
 			'settings'     => __( 'Settings', 'axle-runtime-doctor' ),
 		);
 
-		echo '<div class="wrap ard-wrap">';
+		echo '<div class="wrap axle-ui ard-wrap">';
 		echo '<h1>' . esc_html__( 'Runtime Doctor', 'axle-runtime-doctor' ) . '</h1>';
+		$latest = self::full() ? $this->history->latest() : null;
+		if ( $latest ) {
+			$counts = (array) $latest['counts'];
+			if ( ! empty( $counts[ Result::CRITICAL ] ) ) {
+				/* translators: %d: number of critical checks. */
+				echo '<span class="axle-status"><span class="axle-badge axle-badge--error">' . esc_html( sprintf( _n( '%d critical', '%d critical', (int) $counts[ Result::CRITICAL ], 'axle-runtime-doctor' ), (int) $counts[ Result::CRITICAL ] ) ) . '</span></span>';
+			} elseif ( ! empty( $counts[ Result::RECOMMENDED ] ) ) {
+				/* translators: %d: number of recommended checks. */
+				echo '<span class="axle-status"><span class="axle-badge axle-badge--warning">' . esc_html( sprintf( _n( '%d recommended', '%d recommended', (int) $counts[ Result::RECOMMENDED ], 'axle-runtime-doctor' ), (int) $counts[ Result::RECOMMENDED ] ) ) . '</span></span>';
+			} else {
+				echo '<span class="axle-status"><span class="axle-badge axle-badge--good">' . esc_html__( 'All good', 'axle-runtime-doctor' ) . '</span></span>';
+			}
+		}
+		echo '<hr class="wp-header-end">';
 		$this->message();
 
 		if ( self::full() ) {
@@ -230,6 +274,12 @@ final class Page implements Service {
 				);
 			}
 			echo '</nav>';
+		}
+
+		if ( 'settings' === $tab ) {
+			echo '<p class="axle-intro">' . esc_html__( 'Choose your host, how requests are sampled and when a check counts as worse.', 'axle-runtime-doctor' ) . '</p>';
+		} elseif ( 'checks' === $tab && self::full() ) {
+			echo '<p class="axle-intro">' . esc_html__( 'Checks the PHP, cache and server settings your visitors really get, and tells you what to change on your host.', 'axle-runtime-doctor' ) . '</p>';
 		}
 
 		switch ( $tab ) {
@@ -247,6 +297,7 @@ final class Page implements Service {
 		}
 
 		echo '<div class="ard-live screen-reader-text" role="status" aria-live="polite"></div>';
+		AxleUi::footer();
 		echo '</div>';
 	}
 
@@ -278,11 +329,11 @@ final class Page implements Service {
 	 * @param string $label Button label.
 	 */
 	private function run_form( string $label ): void {
-		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" class="ard-run-form" data-ard-run>';
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" class="axle-actions ard-run-form" data-ard-run>';
 		wp_nonce_field( 'axle_runtime_doctor_run' );
 		echo '<input type="hidden" name="action" value="axle_runtime_doctor_run">';
 		echo '<button type="submit" class="button button-primary ard-run">' . esc_html( $label ) . '</button>';
-		echo ' <span class="ard-running" hidden><span class="spinner is-active"></span>' . esc_html__( 'Running the checks. This takes a few seconds.', 'axle-runtime-doctor' ) . '</span>';
+		echo '<span class="ard-running" hidden><span class="spinner is-active"></span>' . esc_html__( 'Running the checks. This takes a few seconds.', 'axle-runtime-doctor' ) . '</span>';
 		echo '</form>';
 	}
 
@@ -292,7 +343,7 @@ final class Page implements Service {
 	private function render_checks(): void {
 		$report = $this->history->latest();
 		if ( ! $report ) {
-			echo '<div class="ard-empty" data-ard-autorun>';
+			echo '<div class="axle-empty ard-empty" data-ard-autorun>';
 			echo '<p>' . esc_html__( 'No checks have run yet. They run inside a web request, so the values are the ones your visitors get.', 'axle-runtime-doctor' ) . '</p>';
 			$this->run_form( __( 'Run the checks', 'axle-runtime-doctor' ) );
 			echo '</div>';
@@ -308,7 +359,7 @@ final class Page implements Service {
 	 * Tools > Runtime Doctor on a site of a network: the checks about this site, run live.
 	 */
 	private function render_site_checks(): void {
-		echo '<p>' . esc_html__( 'PHP, OPcache and the object cache are shared by every site of this network. The network admin sees them under Network Admin > Settings > Runtime Doctor. These checks are about this site.', 'axle-runtime-doctor' ) . '</p>';
+		echo '<p class="axle-intro">' . esc_html__( 'PHP, OPcache and the object cache are shared by every site of this network. The network admin sees them under Network Admin > Settings > Runtime Doctor. These checks are about this site.', 'axle-runtime-doctor' ) . '</p>';
 		$report = $this->runner->run(
 			array(
 				'per_site' => true,
@@ -328,42 +379,37 @@ final class Page implements Service {
 		// The host from the settings now, so a changed override shows at once.
 		$host = $this->hosts->current();
 
-		echo '<div class="ard-summary">';
-		echo '<ul class="ard-counts">';
-		foreach ( array( Result::CRITICAL, Result::RECOMMENDED, Result::GOOD ) as $status ) {
+		echo '<div class="axle-stats ard-summary">';
+		$stats = array(
+			Result::CRITICAL    => 'error',
+			Result::RECOMMENDED => 'warning',
+			Result::GOOD        => 'good',
+		);
+		foreach ( $stats as $status => $tone ) {
 			printf(
-				'<li class="ard-count ard-count--%1$s"><span class="ard-count-number">%2$d</span> %3$s</li>',
-				esc_attr( $status ),
+				'<div class="axle-stat axle-stat--%1$s ard-count ard-count--%4$s"><span class="axle-stat__value ard-count-number">%2$d</span><span class="axle-stat__label">%3$s</span></div>',
+				esc_attr( $tone ),
 				(int) ( $counts[ $status ] ?? 0 ),
-				esc_html( Result::status_label( $status ) )
+				esc_html( Result::status_label( $status ) ),
+				esc_attr( $status )
 			);
 		}
-		echo '</ul>';
+		echo '</div>';
 
-		echo '<div class="ard-host">';
-		printf(
-			/* translators: %s: host name. */
-			esc_html__( 'Host: %s', 'axle-runtime-doctor' ),
-			'<strong class="ard-host-name">' . esc_html( $host['label'] ) . '</strong>'
-		);
-		echo ' <a href="' . esc_url( self::url( 'settings' ) . '#ard-host' ) . '">' . esc_html__( 'change', 'axle-runtime-doctor' ) . '<span class="screen-reader-text"> ' . esc_html__( 'the host', 'axle-runtime-doctor' ) . '</span></a>';
+		echo '<section class="axle-card ard-host-card">';
+		echo '<dl class="axle-facts">';
+		echo '<dt>' . esc_html__( 'Host', 'axle-runtime-doctor' ) . '</dt><dd><strong class="ard-host-name">' . esc_html( $host['label'] ) . '</strong>';
+		echo ' <a href="' . esc_url( self::url( 'settings' ) . '#ard-host' ) . '">' . esc_html__( 'Change', 'axle-runtime-doctor' ) . '<span class="screen-reader-text"> ' . esc_html__( 'the host', 'axle-runtime-doctor' ) . '</span></a>';
 		echo '<details class="ard-evidence"><summary>' . esc_html__( 'How it was detected', 'axle-runtime-doctor' ) . '</summary><ul>';
 		foreach ( $host['evidence'] as $line ) {
 			echo '<li>' . esc_html( (string) $line ) . '</li>';
 		}
-		echo '</ul></details>';
-		echo '</div>';
-
-		echo '<div class="ard-last">';
-		printf(
-			/* translators: 1: time ago, 2: web or WP-CLI. */
-			esc_html__( 'Last run %1$s ago, in %2$s.', 'axle-runtime-doctor' ),
-			esc_html( human_time_diff( (int) $report['time'] ) ),
-			'cli' === ( $report['sapi'] ?? '' ) ? esc_html__( 'WP-CLI (the probe failed)', 'axle-runtime-doctor' ) : esc_html__( 'the web server', 'axle-runtime-doctor' )
-		);
-		echo '</div>';
+		echo '</ul></details></dd>';
+		echo '<dt>' . esc_html__( 'Last run', 'axle-runtime-doctor' ) . '</dt><dd>' . self::time( (int) $report['time'] ) . ', '; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in time().
+		echo 'cli' === ( $report['sapi'] ?? '' ) ? esc_html__( 'in WP-CLI (the probe failed)', 'axle-runtime-doctor' ) : esc_html__( 'in the web server', 'axle-runtime-doctor' );
+		echo '</dd></dl>';
 		$this->run_form( __( 'Run checks again', 'axle-runtime-doctor' ) );
-		echo '</div>';
+		echo '</section>';
 	}
 
 	/**
@@ -391,7 +437,7 @@ final class Page implements Service {
 			);
 
 			echo '<section class="ard-group" id="ard-group-' . esc_attr( $group ) . '" aria-labelledby="ard-group-' . esc_attr( $group ) . '-title">';
-			echo '<h2 id="ard-group-' . esc_attr( $group ) . '-title">' . esc_html( $label ) . '</h2>';
+			echo '<h2 class="axle-card__title" id="ard-group-' . esc_attr( $group ) . '-title">' . esc_html( $label ) . '</h2>';
 			foreach ( $rows as $result ) {
 				$this->row( $result, $host );
 			}
@@ -409,9 +455,9 @@ final class Page implements Service {
 		$id     = (string) $result['id'];
 		$status = (string) $result['status'];
 
-		echo '<div class="ard-check ard-check--' . esc_attr( $status ) . '" id="ard-check-' . esc_attr( $id ) . '" data-check="' . esc_attr( $id ) . '">';
+		echo '<div class="axle-card ard-check ard-check--' . esc_attr( $status ) . '" id="ard-check-' . esc_attr( $id ) . '" data-check="' . esc_attr( $id ) . '">';
 		echo '<div class="ard-check-head">';
-		echo '<span class="ard-badge ard-badge--' . esc_attr( $status ) . '">' . esc_html( Result::status_label( $status ) ) . '</span>';
+		echo self::badge( $status ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in badge().
 		echo '<h3 class="ard-check-title">' . esc_html( (string) $result['label'] ) . '</h3>';
 		echo '<p class="ard-check-summary">' . esc_html( (string) $result['summary'] );
 		if ( ! empty( $result['inferred'] ) ) {
@@ -420,12 +466,12 @@ final class Page implements Service {
 		echo '</p></div>';
 
 		if ( '' !== (string) $result['value'] || '' !== (string) $result['expected'] ) {
-			echo '<dl class="ard-values">';
+			echo '<dl class="axle-facts ard-values">';
 			if ( '' !== (string) $result['value'] ) {
-				echo '<div><dt>' . esc_html__( 'Value', 'axle-runtime-doctor' ) . '</dt><dd class="ard-value">' . esc_html( (string) $result['value'] ) . '</dd></div>';
+				echo '<dt>' . esc_html__( 'Value', 'axle-runtime-doctor' ) . '</dt><dd class="ard-value">' . esc_html( (string) $result['value'] ) . '</dd>';
 			}
 			if ( '' !== (string) $result['expected'] ) {
-				echo '<div><dt>' . esc_html__( 'Expected', 'axle-runtime-doctor' ) . '</dt><dd class="ard-expected">' . esc_html( (string) $result['expected'] ) . '</dd></div>';
+				echo '<dt>' . esc_html__( 'Expected', 'axle-runtime-doctor' ) . '</dt><dd class="ard-expected">' . esc_html( (string) $result['expected'] ) . '</dd>';
 			}
 			echo '</dl>';
 		}
@@ -469,9 +515,9 @@ final class Page implements Service {
 		/* translators: %s: host name. */
 		echo esc_html( sprintf( __( 'How to fix on %s', 'axle-runtime-doctor' ), (string) ( $host['label'] ?? '' ) ) );
 		echo '</summary>';
-		echo '<dl class="ard-values">';
-		echo '<div><dt>' . esc_html__( 'Setting', 'axle-runtime-doctor' ) . '</dt><dd>' . esc_html( $fix['setting'] ) . '</dd></div>';
-		echo '<div><dt>' . esc_html__( 'Where', 'axle-runtime-doctor' ) . '</dt><dd>' . esc_html( $fix['where'] ) . '</dd></div>';
+		echo '<dl class="axle-facts ard-values">';
+		echo '<dt>' . esc_html__( 'Setting', 'axle-runtime-doctor' ) . '</dt><dd>' . esc_html( $fix['setting'] ) . '</dd>';
+		echo '<dt>' . esc_html__( 'Where', 'axle-runtime-doctor' ) . '</dt><dd>' . esc_html( $fix['where'] ) . '</dd>';
 		echo '</dl>';
 		if ( $fix['steps'] ) {
 			echo '<ol class="ard-steps">';
@@ -520,7 +566,7 @@ final class Page implements Service {
 			}
 			echo '<tr data-option="' . esc_attr( $name ) . '"><td><code>' . esc_html( $name ) . '</code>';
 			if ( $flags ) {
-				echo ' <span class="ard-flag">' . esc_html( implode( ', ', $flags ) ) . '</span>';
+				echo ' <span class="axle-badge axle-badge--warning ard-flag">' . esc_html( implode( ', ', $flags ) ) . '</span>';
 			}
 			echo '</td><td class="num">' . esc_html( size_format( (int) $option['size'], 1 ) ) . '</td>';
 			echo '<td>' . esc_html( '' !== (string) $option['owner'] ? (string) $option['owner'] : __( 'Unknown', 'axle-runtime-doctor' ) ) . '</td><td>';
@@ -538,7 +584,7 @@ final class Page implements Service {
 			) as $list
 		) {
 			if ( $list[0] ) {
-				echo '<h4>' . esc_html( $list[1] ) . '</h4><ul class="ard-option-list">';
+				echo '<h3>' . esc_html( $list[1] ) . '</h3><ul class="ard-option-list">';
 				foreach ( $list[0] as $name ) {
 					echo '<li><code>' . esc_html( (string) $name ) . '</code> ';
 					$this->autoload_button( (string) $name );
@@ -568,9 +614,9 @@ final class Page implements Service {
 	 */
 	private function render_history(): void {
 		$snapshots = $this->history->all();
-		echo '<p>' . esc_html__( 'A snapshot is stored after each full run, and the checks run once a day on their own. A check that got worse is marked as a regression and emailed to the alert recipients.', 'axle-runtime-doctor' ) . '</p>';
+		echo '<p class="axle-intro">' . esc_html__( 'A snapshot is stored after each full run, and the checks run once a day on their own. A check that got worse is marked as a regression and emailed to the alert recipients.', 'axle-runtime-doctor' ) . '</p>';
 		if ( ! $snapshots ) {
-			echo '<p class="ard-empty">' . esc_html__( 'No snapshots yet.', 'axle-runtime-doctor' ) . '</p>';
+			echo '<div class="axle-empty ard-empty"><p>' . esc_html__( 'No snapshots yet. One is stored after each full run, so run the checks from the Checks tab.', 'axle-runtime-doctor' ) . '</p></div>';
 
 			return;
 		}
@@ -581,7 +627,7 @@ final class Page implements Service {
 			$labels[ $id ] = $check->label();
 		}
 
-		echo '<h2>' . esc_html__( 'Each check over time', 'axle-runtime-doctor' ) . '</h2>';
+		echo '<h2 class="axle-card__title">' . esc_html__( 'Each check over time', 'axle-runtime-doctor' ) . '</h2>';
 		echo '<table class="widefat striped ard-history-checks"><thead><tr>';
 		echo '<th scope="col">' . esc_html__( 'Check', 'axle-runtime-doctor' ) . '</th>';
 		echo '<th scope="col">' . esc_html__( 'Status, oldest first', 'axle-runtime-doctor' ) . '</th>';
@@ -591,7 +637,7 @@ final class Page implements Service {
 			$regressed = in_array( $id, (array) ( $latest['regressions'] ?? array() ), true );
 			echo '<tr class="' . ( $regressed ? 'ard-regressed' : '' ) . '" data-check="' . esc_attr( (string) $id ) . '"><th scope="row">' . esc_html( $labels[ $id ] ?? (string) $id );
 			if ( $regressed ) {
-				echo ' <span class="ard-flag">' . esc_html__( 'regression', 'axle-runtime-doctor' ) . '</span>';
+				echo ' <span class="axle-badge axle-badge--error ard-flag">' . esc_html__( 'Regression', 'axle-runtime-doctor' ) . '</span>';
 			}
 			echo '</th><td><ol class="ard-spark">';
 			foreach ( $snapshots as $snapshot ) {
@@ -601,11 +647,11 @@ final class Page implements Service {
 				echo '<li class="ard-spark-dot ard-spark-dot--' . esc_attr( '' !== $status ? $status : 'none' ) . '" title="' . esc_attr( $when . ': ' . $label ) . '"><span class="screen-reader-text">' . esc_html( $when . ': ' . $label ) . '</span></li>';
 			}
 			echo '</ol></td>';
-			echo '<td><span class="ard-badge ard-badge--' . esc_attr( (string) $now['status'] ) . '">' . esc_html( Result::status_label( (string) $now['status'] ) ) . '</span></td></tr>';
+			echo '<td>' . self::badge( (string) $now['status'] ) . '</td></tr>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in badge().
 		}
 		echo '</tbody></table>';
 
-		echo '<h2>' . esc_html__( 'Snapshots', 'axle-runtime-doctor' ) . '</h2>';
+		echo '<h2 class="axle-card__title ard-snapshots-title">' . esc_html__( 'Snapshots', 'axle-runtime-doctor' ) . '</h2>';
 		echo '<table class="widefat striped ard-snapshots"><thead><tr>';
 		foreach ( array( __( 'Time', 'axle-runtime-doctor' ), __( 'Host', 'axle-runtime-doctor' ), __( 'Critical', 'axle-runtime-doctor' ), __( 'Recommended', 'axle-runtime-doctor' ), __( 'Good', 'axle-runtime-doctor' ), __( 'Regressions', 'axle-runtime-doctor' ) ) as $heading ) {
 			echo '<th scope="col">' . esc_html( $heading ) . '</th>';
@@ -621,7 +667,7 @@ final class Page implements Service {
 				(array) ( $snapshot['regressions'] ?? array() )
 			);
 			echo '<tr' . ( $regressions ? ' class="ard-regressed"' : '' ) . '>';
-			echo '<td>' . esc_html( wp_date( (string) get_option( 'date_format' ) . ' ' . (string) get_option( 'time_format' ), (int) $snapshot['time'] ) ) . '</td>';
+			echo '<td>' . self::time( (int) $snapshot['time'] ) . '</td>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in time().
 			echo '<td>' . esc_html( $hosts[ $snapshot['host'] ] ?? (string) $snapshot['host'] ) . '</td>';
 			echo '<td>' . (int) $counts[ Result::CRITICAL ] . '</td><td>' . (int) $counts[ Result::RECOMMENDED ] . '</td><td>' . (int) $counts[ Result::GOOD ] . '</td>';
 			echo '<td>' . esc_html( $regressions ? implode( ', ', $regressions ) : '-' ) . '</td></tr>';
@@ -635,15 +681,15 @@ final class Page implements Service {
 	private function render_slow_queries(): void {
 		$report = $this->history->latest();
 		$slow   = is_array( $report ) && isset( $report['slow_queries'] ) ? (array) $report['slow_queries'] : array();
-		echo '<p>' . esc_html__( 'Each run loads the key pages of the site with query logging on and groups the queries by shape, with numbers and strings taken out. Slowest total time first.', 'axle-runtime-doctor' ) . '</p>';
+		echo '<p class="axle-intro">' . esc_html__( 'Each run loads the key pages of the site with query logging on and groups the queries by shape, with numbers and strings taken out. Slowest total time first.', 'axle-runtime-doctor' ) . '</p>';
 		if ( ! $slow ) {
-			echo '<p class="ard-empty">' . esc_html__( 'No queries measured yet. Run the checks first.', 'axle-runtime-doctor' ) . '</p>';
+			echo '<div class="axle-empty ard-empty"><p>' . esc_html__( 'No queries measured yet. Run the checks from the Checks tab first.', 'axle-runtime-doctor' ) . '</p></div>';
 
 			return;
 		}
 
 		$limit = (float) ( $slow['threshold_ms'] ?? Settings::slow_query_ms() );
-		echo '<h2>' . esc_html__( 'Pages loaded', 'axle-runtime-doctor' ) . '</h2><ul class="ard-pages">';
+		echo '<h2 class="axle-card__title">' . esc_html__( 'Pages loaded', 'axle-runtime-doctor' ) . '</h2><ul class="ard-pages">';
 		foreach ( (array) ( $slow['probed'] ?? array() ) as $url ) {
 			echo '<li><a href="' . esc_url( (string) $url ) . '">' . esc_html( (string) $url ) . '</a></li>';
 		}
@@ -695,6 +741,7 @@ final class Page implements Service {
 		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" class="ard-settings">';
 		wp_nonce_field( 'axle_runtime_doctor_settings' );
 		echo '<input type="hidden" name="action" value="axle_runtime_doctor_settings">';
+		echo '<section class="axle-card"><h2 class="axle-card__title">' . esc_html__( 'General', 'axle-runtime-doctor' ) . '</h2>';
 		echo '<table class="form-table" role="presentation"><tbody>';
 
 		echo '<tr><th scope="row"><label for="ard-host">' . esc_html__( 'Host', 'axle-runtime-doctor' ) . '</label></th><td>';
@@ -719,15 +766,15 @@ final class Page implements Service {
 		echo '<tr><th scope="row"><label for="ard-recipients">' . esc_html__( 'Alert recipients', 'axle-runtime-doctor' ) . '</label></th><td>';
 		echo '<input type="text" class="regular-text" id="ard-recipients" name="recipients" aria-describedby="ard-recipients-help" value="' . esc_attr( (string) $settings['recipients'] ) . '">';
 		echo '<p class="description" id="ard-recipients-help">' . esc_html__( 'Email addresses, separated by commas, for when a check gets worse. Empty: the site admin email.', 'axle-runtime-doctor' ) . '</p></td></tr>';
-		echo '</tbody></table>';
+		echo '</tbody></table></section>';
 
-		echo '<h2>' . esc_html__( 'Thresholds', 'axle-runtime-doctor' ) . '</h2><table class="form-table" role="presentation"><tbody>';
+		echo '<section class="axle-card"><h2 class="axle-card__title">' . esc_html__( 'Thresholds', 'axle-runtime-doctor' ) . '</h2><table class="form-table" role="presentation"><tbody>';
 		foreach ( $labels as $key => $label ) {
 			echo '<tr><th scope="row"><label for="ard-t-' . esc_attr( $key ) . '">' . esc_html( $label ) . '</label></th><td>';
 			echo '<input type="number" step="any" min="0" class="small-text" id="ard-t-' . esc_attr( $key ) . '" name="thresholds[' . esc_attr( $key ) . ']" value="' . esc_attr( (string) $thresholds[ $key ] ) . '">';
 			echo '</td></tr>';
 		}
-		echo '</tbody></table>';
+		echo '</tbody></table></section>';
 		submit_button( __( 'Save settings', 'axle-runtime-doctor' ) );
 		echo '</form>';
 	}

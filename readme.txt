@@ -18,7 +18,7 @@ Site Health says "Opcode cache is enabled" and stops there. Axle Runtime Doctor 
 
 Free and open source under the GPL. No pro version, no upsells, no ads in wp-admin, no tracking. And it stays that way.
 
-Part of Axle by AryanX, a family of plugins for running WordPress sites safely.
+Part of [Axle](https://axlewp.com/) by AryanX, a family of free plugins for running WordPress sites safely.
 
 = What it checks =
 
@@ -60,8 +60,6 @@ The checks run once a day and keep the last 30 snapshots. When a check gets wors
 `wp axle-runtime-doctor settings`
 
 `check` exits with 1 when a check is critical, so it fits a deploy script.
-
-Part of [Axle](https://axlewp.com/), a family of free plugins for running WordPress sites safely.
 
 == External services ==
 
