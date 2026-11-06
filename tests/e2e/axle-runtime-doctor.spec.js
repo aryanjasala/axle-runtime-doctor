@@ -194,7 +194,7 @@ test.describe( 'Axle Runtime Doctor', () => {
 		await expect( notice ).toContainText( 'wp-config.php permissions: Good to Recommended.' );
 
 		await page.goto( `${ PAGE }&tab=history` );
-		await expect( page.locator( '.ard-history-checks tr.ard-regressed[data-check="fs_config"]' ) ).toContainText( 'regression' );
+		await expect( page.locator( '.ard-history-checks tr.ard-regressed[data-check="fs_config"]' ) ).toContainText( 'Regression' );
 		await expect( page.locator( '.ard-snapshots tbody tr' ) ).toHaveCount( 2 );
 
 		await page.goto( '/wp-admin/index.php' );
