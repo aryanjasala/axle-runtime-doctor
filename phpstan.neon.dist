@@ -3,6 +3,7 @@ parameters:
 	level: 6
 	paths:
 		- axle-runtime-doctor.php
+		- uninstall.php
 		- src
 	scanFiles:
 		- vendor/php-stubs/wp-cli-stubs/wp-cli-stubs.php
