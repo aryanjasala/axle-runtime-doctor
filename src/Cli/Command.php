@@ -568,6 +568,8 @@ final class Command {
 	 *
 	 * The code works once and stops after a few minutes.
 	 *
+	 * @subcommand direct-code
+	 *
 	 * @param array $args       Unused.
 	 * @param array $assoc_args Unused.
 	 */
@@ -622,6 +624,8 @@ final class Command {
 	 *
 	 * <id>
 	 * : The ID, from `imports`.
+	 *
+	 * @subcommand remove-import
 	 *
 	 * @param array $args       ID.
 	 * @param array $assoc_args Unused.

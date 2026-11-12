@@ -464,7 +464,7 @@ final class ComparePanel implements Service {
 			$other = $ids[0] === $first ? $ids[1] : $ids[0];
 		}
 
-		echo '<form method="get" action="' . esc_url( admin_url( is_multisite() ? 'network/settings.php' : 'tools.php' ) ) . '" class="axle-toolbar ard-pick">';
+		echo '<form method="get" action="' . esc_url( is_multisite() ? network_admin_url( 'settings.php' ) : admin_url( 'tools.php' ) ) . '" class="axle-toolbar ard-pick">';
 		echo '<input type="hidden" name="page" value="' . esc_attr( Page::SLUG ) . '"><input type="hidden" name="tab" value="compare">';
 		foreach ( array(
 			'a' => array( __( 'First report', 'axle-runtime-doctor' ), $first ),

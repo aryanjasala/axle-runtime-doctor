@@ -7,6 +7,8 @@
  *   ard_e2e_loopback = off sends them nowhere, to test a blocked loopback.
  * - Emails are captured into the ard_e2e_mail option instead of being sent.
  * - Application passwords work over plain HTTP.
+ * - The option ard_e2e_direct = on lets direct mode call a site over http and
+ *   through the Docker network, since localhost:<port> is not the web server there.
  *
  * @package AryanX\Axle\RuntimeDoctor
  */
@@ -35,3 +37,16 @@ add_filter(
 );
 
 add_filter( 'wp_is_application_passwords_available', '__return_true' );
+
+if ( 'on' === get_option( 'ard_e2e_direct' ) ) {
+	add_filter( 'axle_runtime_doctor_direct_allow_http', '__return_true' );
+	add_filter( 'http_request_host_is_external', '__return_true' );
+	add_filter(
+		'axle_runtime_doctor_direct_request_url',
+		static function ( $url, $origin ) {
+			return str_replace( $origin, 'http://wp', $url );
+		},
+		10,
+		2
+	);
+}
