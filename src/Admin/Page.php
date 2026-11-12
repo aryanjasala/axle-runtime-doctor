@@ -25,7 +25,7 @@ use const AryanX\Axle\RuntimeDoctor\VERSION;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * The screen: Checks, History, Slow queries and Settings tabs.
+ * The screen: Checks, History, Compare, Slow queries and Settings tabs.
  *
  * On multisite the runtime is shared, so the full screen lives in Network
  * Admin (Settings > Runtime Doctor), and each site's Tools > Runtime Doctor
@@ -93,18 +93,26 @@ final class Page implements Service {
 	private Registry $registry;
 
 	/**
+	 * The Compare tab.
+	 *
+	 * @var ComparePanel
+	 */
+	private ComparePanel $compare;
+
+	/**
 	 * Sets up the screen.
 	 *
-	 * @param Settings $settings Settings.
-	 * @param Runner   $runner   Runs the checks.
-	 * @param History  $history  Snapshots.
-	 * @param Fixes    $fixes    Fix data.
-	 * @param Hosts    $hosts    Host detection.
-	 * @param Autoload $autoload Autoloaded options.
-	 * @param Alerts   $alerts   Alerts.
-	 * @param Registry $registry The checks.
+	 * @param Settings     $settings Settings.
+	 * @param Runner       $runner   Runs the checks.
+	 * @param History      $history  Snapshots.
+	 * @param Fixes        $fixes    Fix data.
+	 * @param Hosts        $hosts    Host detection.
+	 * @param Autoload     $autoload Autoloaded options.
+	 * @param Alerts       $alerts   Alerts.
+	 * @param Registry     $registry The checks.
+	 * @param ComparePanel $compare  The Compare tab.
 	 */
-	public function __construct( Settings $settings, Runner $runner, History $history, Fixes $fixes, Hosts $hosts, Autoload $autoload, Alerts $alerts, Registry $registry ) {
+	public function __construct( Settings $settings, Runner $runner, History $history, Fixes $fixes, Hosts $hosts, Autoload $autoload, Alerts $alerts, Registry $registry, ComparePanel $compare ) {
 		$this->settings = $settings;
 		$this->runner   = $runner;
 		$this->history  = $history;
@@ -113,6 +121,7 @@ final class Page implements Service {
 		$this->autoload = $autoload;
 		$this->alerts   = $alerts;
 		$this->registry = $registry;
+		$this->compare  = $compare;
 	}
 
 	/**
@@ -125,12 +134,45 @@ final class Page implements Service {
 		add_action( 'admin_post_axle_runtime_doctor_settings', array( $this, 'handle_settings' ) );
 		add_action( 'admin_post_axle_runtime_doctor_autoload', array( $this, 'handle_autoload' ) );
 		add_action( 'admin_post_axle_runtime_doctor_dismiss', array( $this, 'handle_dismiss' ) );
+		add_action( 'admin_post_axle_runtime_doctor_autoload_undo', array( $this, 'handle_autoload_undo' ) );
+		add_filter( 'plugin_action_links_' . plugin_basename( PLUGIN_FILE ), array( $this, 'action_links' ) );
+		add_filter( 'network_admin_plugin_action_links_' . plugin_basename( PLUGIN_FILE ), array( $this, 'network_action_links' ) );
+	}
+
+	/**
+	 * Adds a link to the screen in the plugin's row on the Plugins screen.
+	 *
+	 * @param array $links Links.
+	 * @return array
+	 */
+	public function action_links( $links ): array {
+		$links = (array) $links;
+		if ( current_user_can( Settings::capability() ) ) {
+			array_unshift( $links, '<a href="' . esc_url( admin_url( 'tools.php?page=' . self::SLUG ) ) . '">' . esc_html__( 'Open Runtime Doctor', 'axle-runtime-doctor' ) . '</a>' );
+		}
+
+		return $links;
+	}
+
+	/**
+	 * The same link in Network Admin.
+	 *
+	 * @param array $links Links.
+	 * @return array
+	 */
+	public function network_action_links( $links ): array {
+		$links = (array) $links;
+		if ( current_user_can( Settings::capability() ) ) {
+			array_unshift( $links, '<a href="' . esc_url( network_admin_url( 'settings.php?page=' . self::SLUG ) ) . '">' . esc_html__( 'Open Runtime Doctor', 'axle-runtime-doctor' ) . '</a>' );
+		}
+
+		return $links;
 	}
 
 	/**
 	 * URL of a tab.
 	 *
-	 * @param string $tab  checks, history, slow-queries or settings.
+	 * @param string $tab  checks, history, compare, slow-queries or settings.
 	 * @param array  $args Extra query arguments.
 	 * @return string
 	 */
@@ -164,6 +206,7 @@ final class Page implements Service {
 		$hook = add_management_page( __( 'Runtime Doctor', 'axle-runtime-doctor' ), __( 'Runtime Doctor', 'axle-runtime-doctor' ), Settings::capability(), self::SLUG, array( $this, 'render' ) );
 		if ( $hook ) {
 			add_action( "admin_print_styles-{$hook}", array( $this, 'enqueue' ) );
+			add_action( "load-{$hook}", array( $this, 'help' ) );
 		}
 	}
 
@@ -174,7 +217,76 @@ final class Page implements Service {
 		$hook = add_submenu_page( 'settings.php', __( 'Runtime Doctor', 'axle-runtime-doctor' ), __( 'Runtime Doctor', 'axle-runtime-doctor' ), Settings::capability(), self::SLUG, array( $this, 'render' ) );
 		if ( $hook ) {
 			add_action( "admin_print_styles-{$hook}", array( $this, 'enqueue' ) );
+			add_action( "load-{$hook}", array( $this, 'help' ) );
 		}
+	}
+
+	/**
+	 * The Help tab of the current tab: an overview and one tab per job.
+	 */
+	public function help(): void {
+		$tab  = self::full() ? self::tab() : 'checks';
+		$tabs = array(
+			array(
+				'id'      => 'overview',
+				'title'   => __( 'Overview', 'axle-runtime-doctor' ),
+				'content' => '<p>' . esc_html__( 'Runtime Doctor checks the server your site runs on, from inside a real web request. WP-CLI and cron have another PHP than your visitors, so the checks never use them for the values.', 'axle-runtime-doctor' ) . '</p><p>' . esc_html__( 'Each problem comes with the fix for your host and a support ticket you can paste.', 'axle-runtime-doctor' ) . '</p>',
+			),
+		);
+
+		switch ( $tab ) {
+			case 'history':
+				$tabs[] = array(
+					'id'      => 'history',
+					'title'   => __( 'History', 'axle-runtime-doctor' ),
+					'content' => '<p>' . esc_html__( 'A snapshot is stored after each full run, and the checks run once a day on their own. The last 30 are kept.', 'axle-runtime-doctor' ) . '</p><p>' . esc_html__( 'A check that got worse than in the snapshot before is a regression. It is marked here, shown in an admin notice and emailed to the alert recipients.', 'axle-runtime-doctor' ) . '</p>',
+				);
+				break;
+			case 'compare':
+				$tabs[] = array(
+					'id'      => 'compare-export',
+					'title'   => __( 'Share a report', 'axle-runtime-doctor' ),
+					'content' => '<p>' . esc_html__( 'Download this site\'s report as a JSON file, or copy it as text. Paths, hostnames, email addresses and IP addresses are replaced first, so the file holds nothing that names the server.', 'axle-runtime-doctor' ) . '</p><p>' . esc_html__( 'If the other site runs Runtime Doctor too, make a one-time code instead. The code works once and for a few minutes.', 'axle-runtime-doctor' ) . '</p>',
+				);
+				$tabs[] = array(
+					'id'      => 'compare-add',
+					'title'   => __( 'Add a report', 'axle-runtime-doctor' ),
+					'content' => '<p>' . esc_html__( 'Paste or upload a report from another site, or fetch it with a one-time code. The report is read as data only and checked field by field.', 'axle-runtime-doctor' ) . '</p><p>' . esc_html__( 'Saved reports stay on this site until you remove them, so you can compare "before the host migration" with "after".', 'axle-runtime-doctor' ) . '</p>',
+				);
+				$tabs[] = array(
+					'id'      => 'compare-read',
+					'title'   => __( 'Read the comparison', 'axle-runtime-doctor' ),
+					'content' => '<p>' . esc_html__( 'Differences come first. A check that has another verdict on each site is listed with the worse side. A setting that differs, such as how many files OPcache holds, says what that does to the speed.', 'axle-runtime-doctor' ) . '</p><p>' . esc_html__( 'Checks with the same verdict but other numbers, and everything identical, are folded away below.', 'axle-runtime-doctor' ) . '</p>',
+				);
+				break;
+			case 'slow-queries':
+				$tabs[] = array(
+					'id'      => 'slow-queries',
+					'title'   => __( 'Slow queries', 'axle-runtime-doctor' ),
+					'content' => '<p>' . esc_html__( 'Each run loads the key pages of the site with query logging on and groups the queries by shape, with numbers and strings taken out. The slowest total time comes first.', 'axle-runtime-doctor' ) . '</p>',
+				);
+				break;
+			case 'settings':
+				$tabs[] = array(
+					'id'      => 'settings',
+					'title'   => __( 'Settings', 'axle-runtime-doctor' ),
+					'content' => '<p>' . esc_html__( 'Choose your host, which picks the fixes and tickets you see. Set how often front-end requests are sampled, and when a check counts as worse.', 'axle-runtime-doctor' ) . '</p>',
+				);
+				break;
+			default:
+				$tabs[] = array(
+					'id'      => 'checks',
+					'title'   => __( 'Reading the checks', 'axle-runtime-doctor' ),
+					'content' => '<p>' . esc_html__( 'Critical needs a fix soon, recommended is worth doing, good is fine and info could not be judged. Open "Why it matters" for the reason and "How to fix" for the steps on your host.', 'axle-runtime-doctor' ) . '</p>',
+				);
+				$tabs[] = array(
+					'id'      => 'autoload',
+					'title'   => __( 'Autoloaded options', 'axle-runtime-doctor' ),
+					'content' => '<p>' . esc_html__( 'Autoloaded options are read from the database on every request. "Turn autoload off" stops that for one option. The option and its value stay, and the Undo link in the notice turns it back on.', 'axle-runtime-doctor' ) . '</p>',
+				);
+		}
+
+		AxleUi::help_tabs( $tabs );
 	}
 
 	/**
@@ -183,7 +295,7 @@ final class Page implements Service {
 	public function enqueue(): void {
 		AxleUi::enqueue();
 		wp_enqueue_style( 'axle-runtime-doctor-admin', plugins_url( 'assets/admin.css', PLUGIN_FILE ), array( AxleUi::HANDLE ), VERSION );
-		wp_enqueue_script( 'axle-runtime-doctor-admin', plugins_url( 'assets/admin.js', PLUGIN_FILE ), array( 'wp-hooks', 'wp-api-fetch', 'wp-i18n' ), VERSION, true );
+		wp_enqueue_script( 'axle-runtime-doctor-admin', plugins_url( 'assets/admin.js', PLUGIN_FILE ), array( 'wp-hooks', 'wp-api-fetch', 'wp-i18n', 'wp-a11y' ), VERSION, true );
 		wp_set_script_translations( 'axle-runtime-doctor-admin', 'axle-runtime-doctor' );
 	}
 
@@ -204,19 +316,6 @@ final class Page implements Service {
 	}
 
 	/**
-	 * A timestamp as relative time, with the exact time on hover.
-	 *
-	 * @param int $time Unix time.
-	 * @return string HTML.
-	 */
-	private static function time( int $time ): string {
-		/* translators: %s: a time span such as "5 minutes". */
-		$text = sprintf( __( '%s ago', 'axle-runtime-doctor' ), human_time_diff( $time ) );
-
-		return '<time datetime="' . esc_attr( gmdate( 'c', $time ) ) . '" title="' . esc_attr( wp_date( (string) get_option( 'date_format' ) . ' ' . (string) get_option( 'time_format' ), $time ) ) . '">' . esc_html( $text ) . '</time>';
-	}
-
-	/**
 	 * The current tab.
 	 *
 	 * @return string
@@ -225,7 +324,7 @@ final class Page implements Service {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only tab switch.
 		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'checks';
 
-		return in_array( $tab, array( 'checks', 'history', 'slow-queries', 'settings' ), true ) ? $tab : 'checks';
+		return in_array( $tab, array( 'checks', 'history', 'compare', 'slow-queries', 'settings' ), true ) ? $tab : 'checks';
 	}
 
 	/**
@@ -240,6 +339,7 @@ final class Page implements Service {
 		$tabs = array(
 			'checks'       => __( 'Checks', 'axle-runtime-doctor' ),
 			'history'      => __( 'History', 'axle-runtime-doctor' ),
+			'compare'      => __( 'Compare', 'axle-runtime-doctor' ),
 			'slow-queries' => __( 'Slow queries', 'axle-runtime-doctor' ),
 			'settings'     => __( 'Settings', 'axle-runtime-doctor' ),
 		);
@@ -286,6 +386,9 @@ final class Page implements Service {
 			case 'history':
 				$this->render_history();
 				break;
+			case 'compare':
+				$this->compare->render();
+				break;
 			case 'slow-queries':
 				$this->render_slow_queries();
 				break;
@@ -315,11 +418,30 @@ final class Page implements Service {
 			/* translators: %s: option name. */
 			'autoload'  => array( 'success', sprintf( __( 'Autoload is off for %s.', 'axle-runtime-doctor' ), $option ) ),
 			/* translators: %s: option name. */
-			'unchanged' => array( 'warning', sprintf( __( 'Nothing changed for %s: autoload was already off, or the option is gone.', 'axle-runtime-doctor' ), $option ) ),
+			'restored'  => array( 'success', sprintf( __( 'Autoload is back on for %s.', 'axle-runtime-doctor' ), $option ) ),
+			/* translators: %s: option name. */
+			'protected' => array( 'warning', sprintf( __( 'Autoload stays on for %s: WordPress needs it on every request.', 'axle-runtime-doctor' ), $option ) ),
+			/* translators: %s: option name. */
+			'unchanged' => array( 'warning', sprintf( __( 'Nothing changed for %s: autoload was already in that state, or the option is gone.', 'axle-runtime-doctor' ), $option ) ),
 			'dismissed' => array( 'success', __( 'Notice dismissed.', 'axle-runtime-doctor' ) ),
 		);
 		if ( isset( $messages[ $message ] ) ) {
-			printf( '<div class="notice notice-%1$s is-dismissible"><p>%2$s</p></div>', esc_attr( $messages[ $message ][0] ), esc_html( $messages[ $message ][1] ) );
+			$undo = '';
+			if ( 'autoload' === $message && '' !== $option ) {
+				$undo = ' <a href="' . esc_url(
+					wp_nonce_url(
+						add_query_arg(
+							array(
+								'action' => 'axle_runtime_doctor_autoload_undo',
+								'option' => rawurlencode( $option ),
+							),
+							admin_url( 'admin-post.php' ) 
+						),
+						'axle_runtime_doctor_autoload_undo' 
+					) 
+				) . '">' . esc_html__( 'Undo', 'axle-runtime-doctor' ) . '</a>';
+			}
+			printf( '<div class="notice notice-%1$s is-dismissible ard-notice" role="status"><p>%2$s%3$s</p></div>', esc_attr( $messages[ $message ][0] ), esc_html( $messages[ $message ][1] ), $undo ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped above.
 		}
 	}
 
@@ -405,7 +527,7 @@ final class Page implements Service {
 			echo '<li>' . esc_html( (string) $line ) . '</li>';
 		}
 		echo '</ul></details></dd>';
-		echo '<dt>' . esc_html__( 'Last run', 'axle-runtime-doctor' ) . '</dt><dd>' . self::time( (int) $report['time'] ) . ', '; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in time().
+		echo '<dt>' . esc_html__( 'Last run', 'axle-runtime-doctor' ) . '</dt><dd>' . AxleUi::relative_time( (int) $report['time'] ) . ', '; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in relative_time().
 		echo 'cli' === ( $report['sapi'] ?? '' ) ? esc_html__( 'in WP-CLI (the probe failed)', 'axle-runtime-doctor' ) : esc_html__( 'in the web server', 'axle-runtime-doctor' );
 		echo '</dd></dl>';
 		$this->run_form( __( 'Run checks again', 'axle-runtime-doctor' ) );
@@ -642,7 +764,7 @@ final class Page implements Service {
 			echo '</th><td><ol class="ard-spark">';
 			foreach ( $snapshots as $snapshot ) {
 				$status = (string) ( $snapshot['results'][ $id ]['status'] ?? '' );
-				$when   = wp_date( (string) get_option( 'date_format' ) . ' ' . (string) get_option( 'time_format' ), (int) $snapshot['time'] );
+				$when   = wp_strip_all_tags( AxleUi::relative_time( (int) $snapshot['time'] ) );
 				$label  = '' !== $status ? Result::status_label( $status ) : __( 'Not run', 'axle-runtime-doctor' );
 				echo '<li class="ard-spark-dot ard-spark-dot--' . esc_attr( '' !== $status ? $status : 'none' ) . '" title="' . esc_attr( $when . ': ' . $label ) . '"><span class="screen-reader-text">' . esc_html( $when . ': ' . $label ) . '</span></li>';
 			}
@@ -667,7 +789,7 @@ final class Page implements Service {
 				(array) ( $snapshot['regressions'] ?? array() )
 			);
 			echo '<tr' . ( $regressions ? ' class="ard-regressed"' : '' ) . '>';
-			echo '<td>' . self::time( (int) $snapshot['time'] ) . '</td>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in time().
+			echo '<td>' . AxleUi::relative_time( (int) $snapshot['time'] ) . '</td>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in relative_time().
 			echo '<td>' . esc_html( $hosts[ $snapshot['host'] ] ?? (string) $snapshot['host'] ) . '</td>';
 			echo '<td>' . (int) $counts[ Result::CRITICAL ] . '</td><td>' . (int) $counts[ Result::RECOMMENDED ] . '</td><td>' . (int) $counts[ Result::GOOD ] . '</td>';
 			echo '<td>' . esc_html( $regressions ? implode( ', ', $regressions ) : '-' ) . '</td></tr>';
@@ -842,7 +964,34 @@ final class Page implements Service {
 		self::back(
 			'checks',
 			array(
-				'ard-message' => $done['changed'] ? 'autoload' : 'unchanged',
+				'ard-message' => $done['changed'] ? 'autoload' : ( self::is_protected_name( $option ) ? 'protected' : 'unchanged' ),
+				'ard-option'  => rawurlencode( $option ),
+			)
+		);
+	}
+
+	/**
+	 * Whether Runtime Doctor refuses to touch an option.
+	 *
+	 * @param string $name Option name.
+	 * @return bool
+	 */
+	private static function is_protected_name( string $name ): bool {
+		return Autoload::is_protected( $name );
+	}
+
+	/**
+	 * Turns autoload back on for an option, to undo "Turn autoload off".
+	 */
+	public function handle_autoload_undo(): void {
+		self::verify( 'axle_runtime_doctor_autoload_undo' );
+		$option = isset( $_GET['option'] ) ? sanitize_text_field( wp_unslash( $_GET['option'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Checked in self::verify().
+		$done   = $this->autoload->enable( array( $option ) );
+		$this->refresh( 'db_autoload' );
+		self::back(
+			'checks',
+			array(
+				'ard-message' => $done['changed'] ? 'restored' : 'unchanged',
 				'ard-option'  => rawurlencode( $option ),
 			)
 		);

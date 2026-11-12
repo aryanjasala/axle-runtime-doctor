@@ -83,8 +83,8 @@ final class Probe implements Service {
 	 */
 	public function authorize( $request ) {
 		$token = (string) $request->get_header( 'x_axle_runtime_doctor_probe' );
-		$grant = '' !== $token ? self::consume( $token ) : null;
-		if ( ! $grant || ! in_array( $grant['mode'], self::MODES, true ) ) {
+		$grant = '' !== $token ? self::consume( $token, self::MODES ) : null;
+		if ( ! $grant ) {
 			return new WP_Error( 'rest_forbidden', __( 'This probe needs a valid token.', 'axle-runtime-doctor' ), array( 'status' => rest_authorization_required_code() ) );
 		}
 		$this->grant = $grant;
@@ -135,11 +135,12 @@ final class Probe implements Service {
 	/**
 	 * Creates a single-use token.
 	 *
-	 * @param string $mode run, read, timing, ping or queries.
+	 * @param string $mode run, read, timing, ping, queries or share.
 	 * @param array  $args What the probe should do.
+	 * @param int    $ttl  Seconds the token stays valid. Default 60.
 	 * @return string The token, to send in the X-Axle-Runtime-Doctor-Probe header.
 	 */
-	public static function issue( string $mode, array $args = array() ): string {
+	public static function issue( string $mode, array $args = array(), int $ttl = self::SECONDS ): string {
 		$token = wp_generate_password( 40, false, false );
 		// An option, not a transient: an object cache that forgets between requests would lose it.
 		add_option(
@@ -147,7 +148,8 @@ final class Probe implements Service {
 			array(
 				'mode'    => $mode,
 				'args'    => $args,
-				'expires' => time() + self::SECONDS,
+				'hash'    => self::hash( $token ),
+				'expires' => time() + max( 1, $ttl ),
 			),
 			'',
 			false
@@ -157,19 +159,31 @@ final class Probe implements Service {
 	}
 
 	/**
-	 * Uses up a token.
+	 * Uses up a token. A token works once: the row is deleted, and only the
+	 * request whose delete succeeds gets the grant, so two requests that send
+	 * the same token at the same moment cannot both win.
 	 *
-	 * @param string      $token Token.
-	 * @param string|null $mode  Only when the token is for this mode.
+	 * @param string          $token Token.
+	 * @param string|string[] $modes Only when the token is for one of these modes.
 	 * @return array|null mode, args. Null when the token is unknown, used or expired.
 	 */
-	public static function consume( string $token, ?string $mode = null ): ?array {
-		$name  = self::PREFIX . self::hash( $token );
+	public static function consume( string $token, $modes = null ): ?array {
+		$hash  = self::hash( $token );
+		$name  = self::PREFIX . $hash;
 		$grant = get_option( $name );
-		if ( ! is_array( $grant ) || ( null !== $mode && ( $grant['mode'] ?? '' ) !== $mode ) ) {
+		if ( ! is_array( $grant ) ) {
 			return null;
 		}
-		delete_option( $name );
+		// The row is found by the hash of the token, and the hash is compared again in constant time.
+		if ( isset( $grant['hash'] ) && ! hash_equals( (string) $grant['hash'], $hash ) ) {
+			return null;
+		}
+		if ( null !== $modes && ! in_array( (string) ( $grant['mode'] ?? '' ), (array) $modes, true ) ) {
+			return null;
+		}
+		if ( ! delete_option( $name ) ) {
+			return null;
+		}
 		if ( (int) ( $grant['expires'] ?? 0 ) < time() ) {
 			return null;
 		}

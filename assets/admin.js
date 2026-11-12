@@ -5,6 +5,8 @@
  *
  * - filter axleRuntimeDoctor.ticketText ( text, checkId, hostId ): the support
  *   ticket text that "Copy support ticket" puts on the clipboard.
+ * - filter axleRuntimeDoctor.ticketText only runs for support tickets, not for the
+ *   report text or code on the Compare tab.
  * - action axleRuntimeDoctor.checksFinished ( report ): the checks ran from the
  *   screen; fires before the page reloads with the new results.
  */
@@ -18,6 +20,10 @@
 	}
 
 	function announce( message ) {
+		if ( window.wp && window.wp.a11y && window.wp.a11y.speak ) {
+			window.wp.a11y.speak( message );
+			return;
+		}
 		const live = document.querySelector( '.ard-live' );
 		if ( live ) {
 			live.textContent = '';
@@ -80,12 +86,12 @@
 		}
 		let text = field.value;
 		const h = hooks();
-		if ( h ) {
+		if ( h && button.hasAttribute( 'data-check' ) ) {
 			text = String( h.applyFilters( 'axleRuntimeDoctor.ticketText', text, button.getAttribute( 'data-check' ) || '', button.getAttribute( 'data-host' ) || '' ) );
 		}
 		const done = () => {
 			button.setAttribute( 'data-copied', text );
-			announce( __( 'Support ticket copied.', 'axle-runtime-doctor' ) );
+			announce( button.hasAttribute( 'data-check' ) ? __( 'Support ticket copied.', 'axle-runtime-doctor' ) : __( 'Copied.', 'axle-runtime-doctor' ) );
 		};
 		if ( navigator.clipboard && window.isSecureContext ) {
 			navigator.clipboard.writeText( text ).then( done, () => {
@@ -103,6 +109,75 @@
 			done();
 		}
 	} );
+
+	// In-place confirm: the Remove button opens the panel, Keep it closes it and gives focus back.
+	function toggleConfirm( id, open ) {
+		const panel = document.getElementById( id );
+		const opener = document.querySelector( '[data-ard-confirm="' + id + '"]' );
+		if ( ! panel ) {
+			return;
+		}
+		panel.hidden = ! open;
+		if ( opener ) {
+			opener.setAttribute( 'aria-expanded', open ? 'true' : 'false' );
+		}
+		if ( open ) {
+			const first = panel.querySelector( 'button[type="submit"]' );
+			if ( first ) {
+				first.focus();
+			}
+		} else if ( opener ) {
+			opener.focus();
+		}
+	}
+
+	document.addEventListener( 'click', ( event ) => {
+		const opener = event.target.closest( '[data-ard-confirm]' );
+		if ( opener ) {
+			toggleConfirm( opener.getAttribute( 'data-ard-confirm' ), true );
+			return;
+		}
+		const cancel = event.target.closest( '[data-ard-cancel]' );
+		if ( cancel ) {
+			toggleConfirm( cancel.getAttribute( 'data-ard-cancel' ), false );
+		}
+	} );
+
+	document.addEventListener( 'keydown', ( event ) => {
+		if ( 'Escape' !== event.key ) {
+			return;
+		}
+		const panel = event.target.closest && event.target.closest( '.axle-confirm' );
+		if ( panel && panel.id ) {
+			toggleConfirm( panel.id, false );
+		}
+	} );
+
+	// A form that waits for another site: show it is busy, once.
+	document.addEventListener( 'submit', ( event ) => {
+		const form = event.target.closest( 'form[data-ard-busy]' );
+		if ( ! form || form.getAttribute( 'aria-busy' ) === 'true' ) {
+			return;
+		}
+		form.setAttribute( 'aria-busy', 'true' );
+		const spinner = form.querySelector( '.spinner' );
+		if ( spinner ) {
+			spinner.classList.add( 'is-active' );
+		}
+		const button = form.querySelector( 'button[type="submit"]' );
+		if ( button ) {
+			window.setTimeout( () => {
+				button.disabled = true;
+			}, 0 );
+		}
+		announce( __( 'Fetching the report from the other site.', 'axle-runtime-doctor' ) );
+	} );
+
+	// Say what the last action did, for people who cannot see the notice.
+	const notice = document.querySelector( '.ard-notice' );
+	if ( notice ) {
+		announce( notice.textContent.trim() );
+	}
 
 	// No report yet: run the checks right away.
 	const auto = document.querySelector( '[data-ard-autorun] form[data-ard-run]' );

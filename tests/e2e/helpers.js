@@ -4,7 +4,7 @@ const { spawnSync } = require( 'child_process' );
 const { COMPOSE_DIR } = require( './utils/config' );
 const { wp, wpEval } = require( './utils/wp-cli' );
 
-const OPTIONS = [ 'axle_runtime_doctor_settings', 'axle_runtime_doctor_snapshots', 'axle_runtime_doctor_report', 'axle_runtime_doctor_samples', 'axle_runtime_doctor_notice', 'ard_e2e_mail', 'ard_e2e_loopback' ];
+const OPTIONS = [ 'axle_runtime_doctor_settings', 'axle_runtime_doctor_snapshots', 'axle_runtime_doctor_report', 'axle_runtime_doctor_samples', 'axle_runtime_doctor_notice', 'axle_runtime_doctor_imports', 'ard_e2e_mail', 'ard_e2e_loopback' ];
 const FIXTURES = '/var/www/html/wp-content/plugins/axle-runtime-doctor/tests/e2e/fixtures';
 
 /**

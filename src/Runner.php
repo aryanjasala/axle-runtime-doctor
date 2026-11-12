@@ -9,6 +9,7 @@ namespace AryanX\Axle\RuntimeDoctor;
 
 use AryanX\Axle\RuntimeDoctor\Checks\Context;
 use AryanX\Axle\RuntimeDoctor\Checks\Registry;
+use AryanX\Axle\RuntimeDoctor\Compare\Environment;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -207,7 +208,11 @@ final class Runner {
 			'counts'  => self::counts( $results ),
 			'results' => $results,
 		);
-		$facts  = $context->all();
+		if ( $full ) {
+			// What the settings are on this server, so a report can be compared with another site's.
+			$report['environment'] = Environment::collect();
+		}
+		$facts = $context->all();
 		if ( isset( $facts['slow_queries'] ) && is_array( $facts['slow_queries'] ) ) {
 			$report['slow_queries'] = $facts['slow_queries'];
 		}
@@ -219,7 +224,7 @@ final class Runner {
 		/**
 		 * Fires after the checks ran.
 		 *
-		 * @param array $report time, host, sapi, via, source, counts, results, slow_queries.
+		 * @param array $report time, host, sapi, via, source, counts, results, environment, slow_queries.
 		 */
 		do_action( 'axle_runtime_doctor_checks_finished', $report );
 

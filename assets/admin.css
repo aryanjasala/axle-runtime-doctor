@@ -125,3 +125,35 @@ tr.ard-regressed td {
 	word-break: break-word;
 	font-size: 12px;
 }
+
+.ard-pick select {
+	max-width: 100%;
+}
+
+.ard-compare-title,
+.ard-compare-more {
+	margin-top: 24px;
+}
+
+.ard-compare-more summary {
+	cursor: pointer;
+}
+
+.ard-compare td,
+.ard-compare th {
+	vertical-align: top;
+}
+
+.ard-import textarea,
+.ard-json textarea {
+	font-size: 12px;
+}
+
+.ard-fetch .spinner {
+	float: none;
+	margin: 0 6px;
+}
+
+.ard-saved .axle-confirm {
+	margin-top: 8px;
+}

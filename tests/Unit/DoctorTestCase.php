@@ -44,6 +44,20 @@ abstract class DoctorTestCase extends TestCase {
 				return true;
 			}
 		);
+		Functions\when( 'wp_using_ext_object_cache' )->justReturn( false );
+		Functions\when( 'wp_strip_all_tags' )->alias( 'strip_tags' );
+		Functions\when( 'wp_unslash' )->returnArg();
+		Functions\when( 'site_url' )->justReturn( 'https://example.com' );
+		Functions\when( 'number_format_i18n' )->alias(
+			static function ( $number, $decimals = 0 ) {
+				return number_format( (float) $number, (int) $decimals );
+			}
+		);
+		Functions\when( 'size_format' )->alias(
+			static function ( $bytes ) {
+				return (int) round( $bytes / 1024 ) . ' KB';
+			}
+		);
 		Functions\when( 'sanitize_key' )->alias(
 			static function ( $key ) {
 				return preg_replace( '/[^a-z0-9_\-]/', '', strtolower( (string) $key ) );

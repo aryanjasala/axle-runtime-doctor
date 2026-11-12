@@ -7,10 +7,13 @@
 
 namespace AryanX\Axle\RuntimeDoctor;
 
+use AryanX\Axle\RuntimeDoctor\Admin\ComparePanel;
 use AryanX\Axle\RuntimeDoctor\Admin\Notice;
 use AryanX\Axle\RuntimeDoctor\Admin\Page;
 use AryanX\Axle\RuntimeDoctor\Checks\Registry;
 use AryanX\Axle\RuntimeDoctor\Cli\Command;
+use AryanX\Axle\RuntimeDoctor\Compare\Direct;
+use AryanX\Axle\RuntimeDoctor\Compare\Library;
 use AryanX\Axle\RuntimeDoctor\Health\SiteHealth;
 
 defined( 'ABSPATH' ) || exit;
@@ -91,6 +94,13 @@ final class Plugin {
 	private Runner $runner;
 
 	/**
+	 * Reports kept for comparing.
+	 *
+	 * @var Library
+	 */
+	private Library $library;
+
+	/**
 	 * Starts the plugin. Runs on `plugins_loaded`.
 	 */
 	public static function boot(): void {
@@ -122,6 +132,7 @@ final class Plugin {
 		$this->autoload = new Autoload();
 		$this->alerts   = new Alerts( $this->settings );
 		$this->history  = new History( $this->alerts );
+		$this->library  = new Library();
 		$this->runner   = new Runner( $this->settings, $this->registry, $this->hosts, $this->sampler, $this->autoload, new PhpReleases(), $this->history );
 	}
 
@@ -132,6 +143,15 @@ final class Plugin {
 	 */
 	public function runner(): Runner {
 		return $this->runner;
+	}
+
+	/**
+	 * Reports kept for comparing, for other plugins and tests.
+	 *
+	 * @return Library
+	 */
+	public function library(): Library {
+		return $this->library;
 	}
 
 	/**
@@ -158,16 +178,19 @@ final class Plugin {
 	private function register(): void {
 		Probe::maybe_capture();
 
+		$compare  = new ComparePanel( $this->history, $this->library );
 		$services = array(
 			new Probe(),
 			$this->sampler,
 			new Rest( $this->runner, $this->history ),
 			new Scheduler( $this->runner ),
-			new Page( $this->settings, $this->runner, $this->history, $this->fixes, $this->hosts, $this->autoload, $this->alerts, $this->registry ),
+			new Page( $this->settings, $this->runner, $this->history, $this->fixes, $this->hosts, $this->autoload, $this->alerts, $this->registry, $compare ),
+			$compare,
+			new Direct( $this->runner, $this->history ),
 			new Notice( $this->alerts ),
 			new SiteHealth( $this->runner, $this->history, $this->registry ),
 			new Privacy( $this->settings ),
-			new Abilities( $this->runner, $this->history, $this->fixes, $this->hosts, $this->autoload, $this->registry ),
+			new Abilities( $this->runner, $this->history, $this->fixes, $this->hosts, $this->autoload, $this->registry, $this->library ),
 		);
 
 		foreach ( $services as $service ) {
@@ -175,7 +198,7 @@ final class Plugin {
 		}
 
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
-			\WP_CLI::add_command( 'axle-runtime-doctor', new Command( $this->settings, $this->runner, $this->history, $this->fixes, $this->hosts, $this->autoload, $this->registry ) );
+			\WP_CLI::add_command( 'axle-runtime-doctor', new Command( $this->settings, $this->runner, $this->history, $this->fixes, $this->hosts, $this->autoload, $this->registry, $this->library ) );
 		}
 	}
 }
