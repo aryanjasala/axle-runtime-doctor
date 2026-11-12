@@ -10,6 +10,7 @@ namespace AryanX\Axle\RuntimeDoctor\Tests\Unit;
 use AryanX\Axle\RuntimeDoctor\Abilities;
 use AryanX\Axle\RuntimeDoctor\Alerts;
 use AryanX\Axle\RuntimeDoctor\Autoload;
+use AryanX\Axle\RuntimeDoctor\Compare\Library;
 use AryanX\Axle\RuntimeDoctor\Checks\Registry;
 use AryanX\Axle\RuntimeDoctor\Fixes;
 use AryanX\Axle\RuntimeDoctor\Health\SiteHealth;
@@ -129,7 +130,7 @@ final class IntegrationsTest extends DoctorTestCase {
 	}
 
 	private function abilities(): Abilities {
-		return new Abilities( $this->runner, $this->history, new Fixes(), new Hosts( $this->settings, array( 'files' => array( '/.dockerenv' ), 'software' => 'Apache' ) ), new Autoload(), $this->registry );
+		return new Abilities( $this->runner, $this->history, new Fixes(), new Hosts( $this->settings, array( 'files' => array( '/.dockerenv' ), 'software' => 'Apache' ) ), new Autoload(), $this->registry, new Library() );
 	}
 
 	public function test_abilities_register_only_with_the_api(): void {
@@ -152,7 +153,7 @@ final class IntegrationsTest extends DoctorTestCase {
 		);
 		$this->abilities()->register_abilities();
 
-		$this->assertSame( array( 'axle-runtime-doctor/run-checks', 'axle-runtime-doctor/get-report', 'axle-runtime-doctor/list-slow-queries', 'axle-runtime-doctor/get-fix', 'axle-runtime-doctor/disable-autoload' ), array_keys( $registered ) );
+		$this->assertSame( array( 'axle-runtime-doctor/run-checks', 'axle-runtime-doctor/get-report', 'axle-runtime-doctor/list-slow-queries', 'axle-runtime-doctor/get-fix', 'axle-runtime-doctor/export-report', 'axle-runtime-doctor/list-imported-reports', 'axle-runtime-doctor/compare-reports', 'axle-runtime-doctor/disable-autoload', 'axle-runtime-doctor/enable-autoload' ), array_keys( $registered ) );
 		$this->assertTrue( $registered['axle-runtime-doctor/run-checks']['meta']['annotations']['readonly'] );
 		$this->assertSame(
 			array(
@@ -163,6 +164,10 @@ final class IntegrationsTest extends DoctorTestCase {
 			$registered['axle-runtime-doctor/disable-autoload']['meta']['annotations']
 		);
 		$this->assertTrue( $registered['axle-runtime-doctor/get-fix']['meta']['mcp']['public'] );
+		foreach ( array( 'export-report', 'list-imported-reports', 'compare-reports' ) as $name ) {
+			$this->assertTrue( $registered[ 'axle-runtime-doctor/' . $name ]['meta']['annotations']['readonly'], $name );
+		}
+		$this->assertFalse( $registered['axle-runtime-doctor/enable-autoload']['meta']['annotations']['readonly'] );
 	}
 
 	public function test_ability_permission_uses_the_filtered_capability(): void {

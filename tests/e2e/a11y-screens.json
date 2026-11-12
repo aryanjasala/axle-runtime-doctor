@@ -173,6 +173,283 @@
 			]
 		},
 		{
+			"name": "Compare, first visit before any run",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare",
+			"steps": [
+				{
+					"waitFor": ".ard-started"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Compare, nothing to compare with yet",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"wp": [
+						"axle-runtime-doctor",
+						"check"
+					],
+					"mayFail": true
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare",
+			"steps": [
+				{
+					"waitFor": "#ard-compare .axle-empty"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Compare, two reports side by side",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"wp": [
+						"axle-runtime-doctor",
+						"check"
+					],
+					"mayFail": true
+				},
+				[
+					"eval",
+					"$r = AryanX\\Axle\\RuntimeDoctor\\Compare\\Exporter::build( get_option( 'axle_runtime_doctor_report' ) ); $r['results']['opcache_coverage']['status'] = 'critical'; $r['results']['opcache_coverage']['summary'] = 'OPcache is skipping wp-content'; $r['settings']['opcache.max_accelerated_files']['value'] = '2000'; AryanX\\Axle\\RuntimeDoctor\\Plugin::instance()->library()->add( AryanX\\Axle\\RuntimeDoctor\\Compare\\Importer::parse( wp_json_encode( $r ) ), 'Production', 'paste' );"
+				]
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare#ard-compare",
+			"steps": [
+				{
+					"waitFor": ".ard-compare"
+				},
+				{
+					"evaluate": "document.querySelectorAll( '.ard-compare-more' ).forEach( ( d ) => { d.open = true; } )"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Compare, confirm before removing a report",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"wp": [
+						"axle-runtime-doctor",
+						"check"
+					],
+					"mayFail": true
+				},
+				[
+					"eval",
+					"$r = AryanX\\Axle\\RuntimeDoctor\\Compare\\Exporter::build( get_option( 'axle_runtime_doctor_report' ) ); $r['results']['opcache_coverage']['status'] = 'critical'; $r['results']['opcache_coverage']['summary'] = 'OPcache is skipping wp-content'; $r['settings']['opcache.max_accelerated_files']['value'] = '2000'; AryanX\\Axle\\RuntimeDoctor\\Plugin::instance()->library()->add( AryanX\\Axle\\RuntimeDoctor\\Compare\\Importer::parse( wp_json_encode( $r ) ), 'Production', 'paste' );"
+				]
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare",
+			"steps": [
+				{
+					"waitFor": "[data-ard-confirm]"
+				},
+				{
+					"click": "[data-ard-confirm]"
+				},
+				{
+					"waitFor": ".axle-confirm:not([hidden])"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Compare, import error",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"wp": [
+						"axle-runtime-doctor",
+						"check"
+					],
+					"mayFail": true
+				},
+				[
+					"eval",
+					"update_user_meta( 1, 'axle_runtime_doctor_flash', array( 'type' => 'error', 'text' => 'That is not valid JSON. Export the report again on the other site and paste the whole file.' ) );"
+				]
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare",
+			"steps": [
+				{
+					"waitFor": ".notice-error"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Compare, removed with Undo",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"wp": [
+						"axle-runtime-doctor",
+						"check"
+					],
+					"mayFail": true
+				},
+				[
+					"eval",
+					"update_user_meta( 1, 'axle_runtime_doctor_flash', array( 'type' => 'success', 'text' => 'Removed the report \"Production\".', 'undo' => 'restore' ) );"
+				]
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare",
+			"steps": [
+				{
+					"waitFor": ".notice-success"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Compare, one-time code shown",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"wp": [
+						"axle-runtime-doctor",
+						"check"
+					],
+					"mayFail": true
+				},
+				[
+					"eval",
+					"update_user_meta( 1, 'axle_runtime_doctor_flash', array( 'type' => 'success', 'text' => 'The code is ready. It works once.', 'code' => 'ard1.eyJ1IjoiaHR0cHM6Ly9leGFtcGxlLmNvbSJ9.abcdef', 'expires' => time() + 600 ) );"
+				]
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare",
+			"steps": [
+				{
+					"waitFor": "#ard-code-made"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Compare, help tab open",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare",
+			"include": [
+				"#contextual-help-wrap"
+			],
+			"steps": [
+				{
+					"click": "#contextual-help-link"
+				},
+				{
+					"waitFor": "#contextual-help-wrap:not([hidden])"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
 			"name": "Runtime Doctor, slow queries",
 			"setup": [
 				{

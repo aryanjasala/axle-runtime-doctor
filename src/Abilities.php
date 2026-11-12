@@ -8,6 +8,10 @@
 namespace AryanX\Axle\RuntimeDoctor;
 
 use AryanX\Axle\RuntimeDoctor\Checks\Registry;
+use AryanX\Axle\RuntimeDoctor\Compare\Comparer;
+use AryanX\Axle\RuntimeDoctor\Compare\Exporter;
+use AryanX\Axle\RuntimeDoctor\Compare\Importer;
+use AryanX\Axle\RuntimeDoctor\Compare\Library;
 use WP_Error;
 
 defined( 'ABSPATH' ) || exit;
@@ -66,6 +70,13 @@ final class Abilities implements Service {
 	private Registry $registry;
 
 	/**
+	 * Kept reports from other sites.
+	 *
+	 * @var Library
+	 */
+	private Library $library;
+
+	/**
 	 * Sets up the abilities.
 	 *
 	 * @param Runner   $runner   Runs the checks.
@@ -74,14 +85,16 @@ final class Abilities implements Service {
 	 * @param Hosts    $hosts    Host detection.
 	 * @param Autoload $autoload Autoloaded options.
 	 * @param Registry $registry The checks.
+	 * @param Library  $library  Kept reports from other sites.
 	 */
-	public function __construct( Runner $runner, History $history, Fixes $fixes, Hosts $hosts, Autoload $autoload, Registry $registry ) {
+	public function __construct( Runner $runner, History $history, Fixes $fixes, Hosts $hosts, Autoload $autoload, Registry $registry, Library $library ) {
 		$this->runner   = $runner;
 		$this->history  = $history;
 		$this->fixes    = $fixes;
 		$this->hosts    = $hosts;
 		$this->autoload = $autoload;
 		$this->registry = $registry;
+		$this->library  = $library;
 	}
 
 	/**
@@ -251,9 +264,97 @@ final class Abilities implements Service {
 		);
 
 		$this->ability(
+			'export-report',
+			__( 'Export the runtime report', 'axle-runtime-doctor' ),
+			__( 'The latest report as a portable document for comparing with another site: every check, and the PHP, OPcache and WordPress settings. Paths, hostnames, email addresses and IP addresses are replaced. Empty results when the checks have not run yet.', 'axle-runtime-doctor' ),
+			array(),
+			$this->document_schema(),
+			array( $this, 'export_report' ),
+			$readonly
+		);
+
+		$this->ability(
+			'list-imported-reports',
+			__( 'List imported reports', 'axle-runtime-doctor' ),
+			__( 'The reports from other sites kept on this site for comparing: ID, name, when they were added and how.', 'axle-runtime-doctor' ),
+			array(),
+			array(
+				'type'       => 'object',
+				'properties' => array(
+					'reports' => array(
+						'type'  => 'array',
+						'items' => array(
+							'type'       => 'object',
+							'properties' => array(
+								'id'     => array( 'type' => 'string' ),
+								'name'   => array( 'type' => 'string' ),
+								'added'  => array( 'type' => 'integer' ),
+								'source' => array( 'type' => 'string' ),
+								'host'   => array( 'type' => 'string' ),
+							),
+						),
+					),
+				),
+			),
+			array( $this, 'list_imported_reports' ),
+			$readonly
+		);
+
+		$this->ability(
+			'compare-reports',
+			__( 'Compare this site with another report', 'axle-runtime-doctor' ),
+			__( 'Puts the latest report of this site next to a report from another site and lists what differs, worst first, with what each difference means. Give the ID of an imported report, or the report itself. Nothing is stored.', 'axle-runtime-doctor' ),
+			array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'import_id' => array(
+						'type'        => 'string',
+						'description' => __( 'ID of an imported report, from list-imported-reports.', 'axle-runtime-doctor' ),
+					),
+					'report'    => array(
+						'type'        => 'object',
+						'description' => __( 'A report exported by another site, as data.', 'axle-runtime-doctor' ),
+					),
+					'all'       => array(
+						'type'        => 'boolean',
+						'description' => __( 'Also list the rows that are identical.', 'axle-runtime-doctor' ),
+					),
+				),
+				'additionalProperties' => false,
+			),
+			array(
+				'type'       => 'object',
+				'properties' => array(
+					'other'  => array( 'type' => 'string' ),
+					'counts' => array(
+						'type'                 => 'object',
+						'additionalProperties' => array( 'type' => 'integer' ),
+					),
+					'rows'   => array(
+						'type'  => 'array',
+						'items' => array(
+							'type'       => 'object',
+							'properties' => array(
+								'type'    => array( 'type' => 'string' ),
+								'key'     => array( 'type' => 'string' ),
+								'label'   => array( 'type' => 'string' ),
+								'state'   => array( 'type' => 'string' ),
+								'here'    => array( 'type' => 'string' ),
+								'there'   => array( 'type' => 'string' ),
+								'meaning' => array( 'type' => 'string' ),
+							),
+						),
+					),
+				),
+			),
+			array( $this, 'compare_reports' ),
+			$readonly
+		);
+
+		$this->ability(
 			'disable-autoload',
 			__( 'Turn autoload off for options', 'axle-runtime-doctor' ),
-			__( 'Stops WordPress from loading the given options on every request. The options and their values stay; they load when code asks for them. Safe to repeat.', 'axle-runtime-doctor' ),
+			__( 'Stops WordPress from loading the given options on every request. The options and their values stay; they load when code asks for them. Options WordPress itself needs are skipped. Safe to repeat.', 'axle-runtime-doctor' ),
 			array(
 				'type'                 => 'object',
 				'properties'           => array(
@@ -281,6 +382,44 @@ final class Abilities implements Service {
 				),
 			),
 			array( $this, 'disable_autoload' ),
+			array(
+				'readonly'    => false,
+				'destructive' => false,
+				'idempotent'  => true,
+			)
+		);
+
+		$this->ability(
+			'enable-autoload',
+			__( 'Turn autoload back on for options', 'axle-runtime-doctor' ),
+			__( 'Undoes disable-autoload: WordPress loads the given options on every request again. Values do not change. Safe to repeat.', 'axle-runtime-doctor' ),
+			array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'options' => array(
+						'type'     => 'array',
+						'items'    => array( 'type' => 'string' ),
+						'minItems' => 1,
+						'maxItems' => 100,
+					),
+				),
+				'required'             => array( 'options' ),
+				'additionalProperties' => false,
+			),
+			array(
+				'type'       => 'object',
+				'properties' => array(
+					'changed' => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'string' ),
+					),
+					'skipped' => array(
+						'type'                 => 'object',
+						'additionalProperties' => array( 'type' => 'string' ),
+					),
+				),
+			),
+			array( $this, 'enable_autoload' ),
 			array(
 				'readonly'    => false,
 				'destructive' => false,
@@ -397,6 +536,140 @@ final class Abilities implements Service {
 	}
 
 	/**
+	 * This site's report as a portable document.
+	 *
+	 * @return array
+	 */
+	public function export_report(): array {
+		$report = $this->history->latest();
+		if ( ! $report ) {
+			return array(
+				'format'   => Exporter::FORMAT,
+				'version'  => Exporter::VERSION,
+				'time'     => 0,
+				'results'  => (object) array(),
+				'settings' => (object) array(),
+			);
+		}
+
+		return Exporter::publish( $report, 'ability' );
+	}
+
+	/**
+	 * The kept reports.
+	 *
+	 * @return array
+	 */
+	public function list_imported_reports(): array {
+		$rows = array();
+		foreach ( $this->library->all() as $item ) {
+			$rows[] = array(
+				'id'     => (string) $item['id'],
+				'name'   => (string) $item['name'],
+				'added'  => (int) $item['added'],
+				'source' => (string) $item['source'],
+				'host'   => (string) ( $item['report']['host']['label'] ?? '' ),
+			);
+		}
+
+		return array( 'reports' => $rows );
+	}
+
+	/**
+	 * Compares this site with another report.
+	 *
+	 * @param array|null $input import_id or report, and all.
+	 * @return array|WP_Error
+	 */
+	public function compare_reports( $input = null ) {
+		$input  = (array) $input;
+		$latest = $this->history->latest();
+		if ( ! $latest ) {
+			return new WP_Error( 'axle_runtime_doctor_no_report', __( 'Run the checks on this site first.', 'axle-runtime-doctor' ), array( 'status' => 409 ) );
+		}
+
+		$name = __( 'Other site', 'axle-runtime-doctor' );
+		if ( ! empty( $input['import_id'] ) ) {
+			$item = $this->library->get( sanitize_key( (string) $input['import_id'] ) );
+			if ( ! $item ) {
+				return new WP_Error( 'axle_runtime_doctor_no_import', __( 'There is no imported report with that ID.', 'axle-runtime-doctor' ), array( 'status' => 404 ) );
+			}
+			$other = (array) $item['report'];
+			$name  = (string) $item['name'];
+		} elseif ( isset( $input['report'] ) && is_array( $input['report'] ) ) {
+			$other = Importer::parse( (string) wp_json_encode( $input['report'] ) );
+			if ( is_wp_error( $other ) ) {
+				return new WP_Error( $other->get_error_code(), $other->get_error_message(), array( 'status' => 400 ) );
+			}
+		} else {
+			return new WP_Error( 'axle_runtime_doctor_nothing_to_compare', __( 'Give an import_id or a report.', 'axle-runtime-doctor' ), array( 'status' => 400 ) );
+		}
+
+		$here   = __( 'This site', 'axle-runtime-doctor' );
+		$result = Comparer::compare( Exporter::build( $latest ), $other, $here, $name );
+		$all    = ! empty( $input['all'] );
+		$rows   = array();
+		foreach ( $result['rows'] as $row ) {
+			if ( ! $all && Comparer::SAME === $row['state'] ) {
+				continue;
+			}
+			$rows[] = array(
+				'type'    => (string) $row['type'],
+				'key'     => (string) $row['key'],
+				'label'   => (string) $row['label'],
+				'state'   => (string) $row['state'],
+				'here'    => self::side( $row['a'] ),
+				'there'   => self::side( $row['b'] ),
+				'meaning' => (string) $row['meaning'],
+			);
+		}
+
+		return array(
+			'other'  => $name,
+			'counts' => $result['counts'],
+			'rows'   => $rows,
+		);
+	}
+
+	/**
+	 * One side of a compared row, as text.
+	 *
+	 * @param array|null $side Result or setting.
+	 * @return string
+	 */
+	private static function side( ?array $side ): string {
+		if ( null === $side ) {
+			return '';
+		}
+		$value = (string) ( $side['value'] ?? '' );
+
+		return isset( $side['status'] ) ? trim( (string) $side['status'] . ': ' . $value, ': ' ) : $value;
+	}
+
+	/**
+	 * Output schema of a portable report.
+	 *
+	 * @return array
+	 */
+	private function document_schema(): array {
+		return array(
+			'type'       => 'object',
+			'properties' => array(
+				'format'         => array( 'type' => 'string' ),
+				'version'        => array( 'type' => 'integer' ),
+				'plugin_version' => array( 'type' => 'string' ),
+				'exported'       => array( 'type' => 'integer' ),
+				'time'           => array( 'type' => 'integer' ),
+				'sapi'           => array( 'type' => 'string' ),
+				'host'           => array( 'type' => 'object' ),
+				'counts'         => array( 'type' => 'object' ),
+				'results'        => array( 'type' => 'object' ),
+				'settings'       => array( 'type' => 'object' ),
+			),
+		);
+	}
+
+	/**
 	 * Turns autoload off.
 	 *
 	 * @param array|null $input options.
@@ -405,6 +678,22 @@ final class Abilities implements Service {
 	public function disable_autoload( $input = null ): array {
 		$input = (array) $input;
 		$done  = $this->autoload->disable( array_map( 'sanitize_text_field', (array) ( $input['options'] ?? array() ) ) );
+
+		return array(
+			'changed' => $done['changed'],
+			'skipped' => (object) $done['skipped'],
+		);
+	}
+
+	/**
+	 * Turns autoload back on.
+	 *
+	 * @param array|null $input options.
+	 * @return array
+	 */
+	public function enable_autoload( $input = null ): array {
+		$input = (array) $input;
+		$done  = $this->autoload->enable( array_map( 'sanitize_text_field', (array) ( $input['options'] ?? array() ) ) );
 
 		return array(
 			'changed' => $done['changed'],

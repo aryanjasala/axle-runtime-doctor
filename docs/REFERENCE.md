@@ -12,6 +12,23 @@ Every check runs inside a web request, because WP-CLI runs a different PHP from 
 
 Loopback requests go to the home URL. Servers that cannot reach their own public address can point them elsewhere with `axle_runtime_doctor_loopback_url`.
 
+## Comparing two sites
+
+The Compare tab puts two runtime reports side by side. Use it when staging is fast, production is slow and the host says both are the same plan.
+
+1. Run the checks on both sites.
+2. On the other site, open Compare and choose **Download the report** (or run `wp axle-runtime-doctor export`).
+3. Here, under **Add another site's report**, choose the file or paste its text, name it and import it. Or, if the other site runs this plugin too, make a **one-time code** there and paste it under **Fetch a report with a code**.
+4. Pick two reports and choose **Compare reports**.
+
+The comparison lists differences first: a check with another verdict on each site, or a setting that differs, with a sentence on what it means. Example: "OPcache holds 2,000 files on Staging and 10,000 on Production: Staging runs out of slots first and recompiles PHP it could have kept." Checks with the same verdict but other numbers, and everything identical, are folded away below.
+
+What an export holds: each check's id, label, status, summary, value and expected value, and these settings read in the web request: PHP version and how PHP runs, `memory_limit`, `max_execution_time`, `max_input_vars`, upload and post size, `display_errors`, the realpath cache, the OPcache settings (`enable`, `memory_consumption`, `interned_strings_buffer`, `max_accelerated_files`, `validate_timestamps`, `revalidate_freq`, `save_comments`, `jit`, `jit_buffer_size`, `file_cache_only`), the web server name, the WordPress version, multisite, whether a persistent object cache is in use, `WP_DEBUG`, `DISABLE_WP_CRON`, the memory constants, the number of active plugins and the database server version. Check details and raw data are left out. Paths become `{abspath}`, `{content}`, `{plugins}` or `{path}/<file name>`, the site's hostnames become `{site}`, and email addresses and IP addresses become `{email}` and `{ip}`.
+
+An import is read as data only. The text is cut off above 256 KB before it is decoded, decoded with a depth limit, never unserialized or run, and rebuilt from the fields this plugin knows: ids, statuses and groups are checked against lists, every string is stripped of markup and cut to length, and unknown fields are dropped. Up to 10 reports are kept (filterable), named and dated, and each can be removed. A removed report can be put back for 15 minutes.
+
+**One-time codes.** Site A makes a code, site B pastes it. The code holds A's address and a random token, plus a checksum that catches typos and cut-off pastes. A keeps only a hash of the token, accepts it once, and stops accepting it after 10 minutes (filterable). B calls `GET /wp-json/axle-runtime-doctor/v1/share` over https with the token in the `X-Axle-Runtime-Doctor-Probe` header, through the safe HTTP functions, so private and local addresses are refused. Turn it off with the `axle_runtime_doctor_direct_enabled` filter.
+
 ## Checks
 
 | ID | Group | Critical when | Recommended when |
@@ -83,6 +100,19 @@ Every threshold can be changed on the Settings tab or with `axle_runtime_doctor_
 | `axle_runtime_doctor_option_owner` | `( array $owner, string $name )`. The owner of an autoloaded option: `label`, `status` (`core`, `active`, `inactive`, `theme`, `unknown`) |
 | `axle_runtime_doctor_autoload_top` | `( int $count )`. How many of the biggest autoloaded options are listed. Default 20 |
 | `axle_runtime_doctor_scan_limit` | `( int $limit )`. Files the PHP-in-uploads scan looks at. Default 20,000 |
+| `axle_runtime_doctor_environment` | `( array $settings )`. The settings a report carries for comparing: key => `label`, `group`, `value`. Keep them free of secrets, paths and hostnames |
+| `axle_runtime_doctor_export_report` | `( array $document, array $report )`. The portable report before it is exported |
+| `axle_runtime_doctor_export_replacements` | `( array $pairs )`. Text to find => what replaces it in an export, such as a private hostname |
+| `axle_runtime_doctor_import_max_bytes` | `( int $bytes )`. Largest report that can be imported. Default 262,144. 10 KB to 2 MB |
+| `axle_runtime_doctor_import_limit` | `( int $limit )`. Imported reports kept. Default 10. 1 to 50 |
+| `axle_runtime_doctor_compare_meaning` | `( string $text, array $row )`. The sentence that says what a difference means. `$row` has `type`, `key`, `group`, `label`, `a`, `b`, `state` |
+| `axle_runtime_doctor_compare_ignored_settings` | `( string[] $keys )`. Settings left out of a comparison. Default none |
+| `axle_runtime_doctor_direct_enabled` | `( bool $enabled )`. Make, take and answer one-time codes. Default true |
+| `axle_runtime_doctor_direct_code_ttl` | `( int $seconds )`. How long a code works. Default 600. 60 to 3,600 |
+| `axle_runtime_doctor_direct_allow_http` | `( bool $allow, string $origin )`. Let a code point at plain http. Default false |
+| `axle_runtime_doctor_direct_request_url` | `( string $url, string $origin )`. The address direct mode calls, for sites that reach each other another way |
+| `axle_runtime_doctor_direct_timeout` | `( int $seconds )`. How long to wait for the other site. Default 30. 5 to 120 |
+| `axle_runtime_doctor_autoload_protected` | `( bool $protected, string $name )`. Options Runtime Doctor will not turn autoload off for. Default true for the options WordPress creates |
 
 ### Actions
 
@@ -94,6 +124,14 @@ Every threshold can be changed on the Settings tab or with `axle_runtime_doctor_
 | `axle_runtime_doctor_regression_detected` | `( string $id, string $before, string $after, array $result )`. A check got worse since the last snapshot |
 | `axle_runtime_doctor_alert_sent` | `( string[] $recipients, array $regressions, bool $sent )`. After the regression email |
 | `axle_runtime_doctor_autoload_changed` | `( string[] $options, array $before, array $after )`. Autoload was turned off; before and after are option => autoload value, for undo |
+| `axle_runtime_doctor_autoload_restored` | `( string[] $options, array $before, array $after )`. Autoload was turned back on (Undo) |
+| `axle_runtime_doctor_report_exported` | `( array $document, string $via )`. A report was exported. `$via` is `download`, `cli`, `ability` or `direct` |
+| `axle_runtime_doctor_report_imported` | `( string $id, array $item )`. A report from another site was kept. `$item` has `id`, `name`, `added`, `source`, `report` |
+| `axle_runtime_doctor_report_removed` | `( string $id, array $item )`. A kept report was removed |
+| `axle_runtime_doctor_report_restored` | `( string $id, array $item )`. A removed report was put back |
+| `axle_runtime_doctor_direct_code_created` | `( int $expires )`. A one-time code was made |
+| `axle_runtime_doctor_direct_fetched` | `( string $origin, array $document )`. A report was fetched from another site |
+| `axle_runtime_doctor_direct_fetch_failed` | `( WP_Error $error, string $origin )`. Direct mode could not fetch a report |
 | `axle_runtime_doctor_probe_failed` | `( WP_Error $error, string $mode, string $url )`. A loopback probe failed |
 | `axle_runtime_doctor_settings_saved` | `( array $settings )`. After the settings are saved |
 
@@ -103,7 +141,7 @@ The screen's script reads these through `wp.hooks` on each use, so scripts loade
 
 | Hook | Type | Use |
 | --- | --- | --- |
-| `axleRuntimeDoctor.ticketText` | filter | `( text, checkId, hostId )`. The support ticket "Copy support ticket" puts on the clipboard |
+| `axleRuntimeDoctor.ticketText` | filter | `( text, checkId, hostId )`. The support ticket "Copy support ticket" puts on the clipboard. It does not run for the report text or code on the Compare tab |
 | `axleRuntimeDoctor.checksFinished` | action | `( report )`. The checks ran from the screen, before the page reloads |
 
 ### Examples
@@ -139,7 +177,11 @@ On WordPress 6.9 and later, Runtime Doctor registers [abilities](https://develop
 | `axle-runtime-doctor/get-report` | Read-only. The latest stored report |
 | `axle-runtime-doctor/list-slow-queries` | Read-only. Query shapes from the latest run, slowest total first. `limit` |
 | `axle-runtime-doctor/get-fix` | Read-only. `check`, `host`: the setting, where, steps and the support ticket |
-| `axle-runtime-doctor/disable-autoload` | Writes, not destructive, idempotent. `options`: turns autoload off for them. Axle Read-Only Mode refuses it during a freeze |
+| `axle-runtime-doctor/export-report` | Read-only. The latest report as the portable document for comparing, with paths, hostnames and addresses taken out |
+| `axle-runtime-doctor/list-imported-reports` | Read-only. The reports kept from other sites: `id`, `name`, `added`, `source`, `host` |
+| `axle-runtime-doctor/compare-reports` | Read-only. `import_id` or `report` (as data), and `all`: what differs between this site and that report, worst first, with what each difference means. Nothing is stored |
+| `axle-runtime-doctor/disable-autoload` | Writes, not destructive, idempotent. `options`: turns autoload off for them. Options WordPress needs are skipped. Axle Read-Only Mode refuses it during a freeze |
+| `axle-runtime-doctor/enable-autoload` | Writes, not destructive, idempotent. `options`: turns autoload back on, to undo the one above. Axle Read-Only Mode refuses it during a freeze |
 
 Run them over REST with `GET .../run-checks/run?input[group]=opcache` and `POST .../disable-autoload/run` with `{ "input": { "options": [ "my_big_option" ] } }`.
 
@@ -151,12 +193,21 @@ wp axle-runtime-doctor report [--status=<statuses>] [--format=<format>]
 wp axle-runtime-doctor history [--format=<format>]
 wp axle-runtime-doctor slow-queries [--limit=<n>] [--format=<format>]
 wp axle-runtime-doctor fix <check-id> [--host=<host>] [--format=text|json]
-wp axle-runtime-doctor autoload off <option>...
+wp axle-runtime-doctor autoload <off|on> <option>...
+wp axle-runtime-doctor export [--file=<file>] [--fresh]
+wp axle-runtime-doctor compare <file-or-id> [--all] [--fresh] [--fields=<fields>] [--format=<format>]
+wp axle-runtime-doctor import <file> [--name=<name>]
+wp axle-runtime-doctor imports [--format=<format>]
+wp axle-runtime-doctor remove-import <id>
+wp axle-runtime-doctor direct-code
+wp axle-runtime-doctor fetch <code> [--name=<name>]
 wp axle-runtime-doctor hosts [--all] [--format=<format>]
 wp axle-runtime-doctor settings [--host=<host>] [--sampling=on|off] [--sample-rate=<n>] [--patch-check=on|off] [--recipients=<emails>]
 ```
 
 `check` runs through the web server and exits with 1 when a check is critical. A full run (no IDs, no group) is stored as a snapshot.
+
+`export` prints or writes the portable report of the latest run, and runs the checks first when there is none or with `--fresh`. `compare` takes a file from another site or the id of a kept report, lists what differs, and exits with 1 when something does, so a script can notice.
 
 ## Data
 
@@ -168,11 +219,14 @@ wp axle-runtime-doctor settings [--host=<host>] [--sampling=on|off] [--sample-ra
 | `axle_runtime_doctor_samples` | Up to 500 front-end samples: hits, misses, peak memory. In the object cache when it is persistent |
 | `axle_runtime_doctor_php_releases` | php.net's release list, 7 days, only when that check is on |
 | `axle_runtime_doctor_notice` | The open regression notice |
-| `axle_runtime_doctor_probe_*` | Probe tokens (hashed, 60 seconds) and probe output, removed after use and once a day |
+| `axle_runtime_doctor_imports` | Reports kept from other sites: name, date, how they came, and the clean report. Up to 10 |
+| `axle_runtime_doctor_import_trash` | The report removed last, for 15 minutes, so Undo works |
+| user meta `axle_runtime_doctor_flash`, `axle_runtime_doctor_compare_state` | The notice an action leaves for the next page view, and whether the user hid or finished the Get started card |
+| `axle_runtime_doctor_probe_*` | Probe tokens and one-time codes (hashed, single use, 60 seconds for probes, 10 minutes for codes) and probe output, removed after use and once a day |
 | `axle_runtime_doctor_daily` | The daily cron event |
 
 All are options with autoload off, network options on multisite. Probe tokens are options rather than transients so an object cache that forgets cannot lose them. Uninstalling removes everything.
 
 ## Privacy
 
-Nothing about visitors is stored. Samples hold counts and memory use only, and query shapes have every value taken out. The only personal data is an alert recipient's email address; the privacy exporter lists it and the eraser removes it.
+Nothing about visitors is stored. Samples hold counts and memory use only, and query shapes have every value taken out. The only personal data is an alert recipient's email address; the privacy exporter lists it and the eraser removes it. Exported reports have paths, hostnames, email addresses and IP addresses replaced. Direct mode makes one request to the address in a code an administrator pasted, and nothing else leaves the site.

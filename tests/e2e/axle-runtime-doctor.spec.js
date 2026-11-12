@@ -153,9 +153,35 @@ test.describe( 'Axle Runtime Doctor', () => {
 
 			const again = h.wpRun( 'axle-runtime-doctor', 'autoload', 'off', 'ard_e2e_big' );
 			expect( again.stderr ).toContain( 'Autoload is already off' );
+
+			// Undo puts autoload back on.
+			await page.locator( '.notice-success' ).getByRole( 'link', { name: 'Undo' } ).click();
+			await expect( page.locator( '.notice-success' ) ).toContainText( 'Autoload is back on for ard_e2e_big.' );
+			expect( wp( 'option', 'get-autoload', 'ard_e2e_big' ) ).toBe( 'on' );
+			expect( h.wpRun( 'axle-runtime-doctor', 'autoload', 'off', 'ard_e2e_big' ).stdout ).toContain( 'Autoload off: ard_e2e_big' );
+			expect( h.wpRun( 'axle-runtime-doctor', 'autoload', 'on', 'ard_e2e_big' ).stdout ).toContain( 'Autoload on: ard_e2e_big' );
+
+			// WordPress's own options are not switched off.
+			expect( h.wpRun( 'axle-runtime-doctor', 'autoload', 'off', 'siteurl' ).stderr ).toContain( 'WordPress needs this option on every request' );
+			expect( wp( 'option', 'get-autoload', 'siteurl' ) ).toBe( 'on' );
 		} finally {
 			wp( 'option', 'delete', 'ard_e2e_big' );
 		}
+	} );
+
+	test( 'the screen has a Help tab, and the Plugins screen links to it', async ( { page } ) => {
+		// With a report stored the screen does not run the checks on load and redirect under us.
+		h.runChecks();
+		await page.goto( PAGE );
+		await page.getByRole( 'button', { name: 'Help' } ).click();
+		await expect( page.locator( '#tab-link-axle-runtime-doctor-overview' ) ).toBeVisible();
+		await expect( page.locator( '#tab-panel-axle-runtime-doctor-overview' ) ).toContainText( 'from inside a real web request' );
+		await page.goto( `${ PAGE }&tab=compare` );
+		await page.getByRole( 'button', { name: 'Help' } ).click();
+		await expect( page.locator( '#tab-link-axle-runtime-doctor-compare-read' ) ).toBeVisible();
+
+		await page.goto( '/wp-admin/plugins.php' );
+		await expect( page.locator( 'tr[data-slug="axle-runtime-doctor"] .row-actions a', { hasText: 'Open Runtime Doctor' } ) ).toHaveAttribute( 'href', /page=axle-runtime-doctor/ );
 	} );
 
 	test( 'a 1,200 item menu with max_input_vars 1000 is named', async ( { page } ) => {

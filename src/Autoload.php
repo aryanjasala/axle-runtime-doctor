@@ -20,6 +20,24 @@ final class Autoload {
 	private const CORE = array( 'siteurl', 'home', 'blogname', 'blogdescription', 'users_can_register', 'admin_email', 'start_of_week', 'use_smilies', 'require_name_email', 'comments_notify', 'posts_per_rss', 'rss_use_excerpt', 'mailserver_url', 'mailserver_login', 'mailserver_pass', 'mailserver_port', 'default_category', 'default_comment_status', 'default_ping_status', 'default_pingback_flag', 'posts_per_page', 'date_format', 'time_format', 'links_updated_date_format', 'comment_moderation', 'moderation_notify', 'permalink_structure', 'rewrite_rules', 'hack_file', 'blog_charset', 'moderation_keys', 'active_plugins', 'category_base', 'ping_sites', 'comment_max_links', 'gmt_offset', 'default_email_category', 'recently_edited', 'template', 'stylesheet', 'comment_registration', 'html_type', 'use_trackback', 'default_role', 'db_version', 'uploads_use_yearmonth_folders', 'upload_path', 'blog_public', 'default_link_category', 'show_on_front', 'tag_base', 'show_avatars', 'avatar_rating', 'upload_url_path', 'thumbnail_size_w', 'thumbnail_size_h', 'thumbnail_crop', 'medium_size_w', 'medium_size_h', 'avatar_default', 'large_size_w', 'large_size_h', 'image_default_link_type', 'image_default_size', 'image_default_align', 'close_comments_for_old_posts', 'close_comments_days_old', 'thread_comments', 'thread_comments_depth', 'page_comments', 'comments_per_page', 'default_comments_page', 'comment_order', 'sticky_posts', 'widget_categories', 'widget_text', 'widget_rss', 'uninstall_plugins', 'timezone_string', 'page_for_posts', 'page_on_front', 'default_post_format', 'link_manager_enabled', 'finished_splitting_shared_terms', 'site_icon', 'medium_large_size_w', 'medium_large_size_h', 'wp_page_for_privacy_policy', 'show_comments_cookies_opt_in', 'admin_email_lifespan', 'disallowed_keys', 'comment_previously_approved', 'auto_plugin_theme_update_emails', 'auto_update_core_dev', 'auto_update_core_minor', 'auto_update_core_major', 'wp_force_deactivated_plugins', 'wp_attachment_pages_enabled', 'wp_notes_notify', 'cron', 'sidebars_widgets', 'initial_db_version', 'fresh_site', 'WPLANG', 'can_compress_scripts', 'recovery_keys', 'recovery_mode_email_last_sent', 'nav_menu_options', 'current_theme', 'theme_switched', 'site_logo', 'db_upgraded', 'https_detection_errors', 'user_count', 'auth_key', 'auth_salt', 'logged_in_key', 'logged_in_salt', 'nonce_key', 'nonce_salt', 'secure_auth_key', 'secure_auth_salt', 'wp_calendar_block_has_published_posts', 'dashboard_widget_options', 'active_sitewide_plugins', 'theme_mods_' );
 
 	/**
+	 * Whether WordPress itself needs an option loaded on every request.
+	 *
+	 * @param string $name Option name.
+	 * @return bool
+	 */
+	public static function is_protected( string $name ): bool {
+		$protected = 'theme_mods_' !== $name && ( in_array( $name, self::CORE, true ) || 0 === strpos( $name, 'widget_' ) || (bool) preg_match( '/user_roles$/', $name ) );
+
+		/**
+		 * Filters whether an option is protected: Runtime Doctor will not turn its autoload off.
+		 *
+		 * @param bool   $protected Default true for the options WordPress itself creates.
+		 * @param string $name      Option name.
+		 */
+		return (bool) apply_filters( 'axle_runtime_doctor_autoload_protected', $protected, $name );
+	}
+
+	/**
 	 * The autoload column values that mean "loaded on every request".
 	 *
 	 * @return string[]
@@ -210,6 +228,8 @@ final class Autoload {
 		foreach ( $names as $name ) {
 			if ( ! isset( $before[ $name ] ) ) {
 				$skipped[ $name ] = __( 'No such option', 'axle-runtime-doctor' );
+			} elseif ( self::is_protected( $name ) ) {
+				$skipped[ $name ] = __( 'WordPress needs this option on every request', 'axle-runtime-doctor' );
 			} elseif ( ! in_array( $before[ $name ], $on, true ) ) {
 				$skipped[ $name ] = __( 'Autoload is already off', 'axle-runtime-doctor' );
 			} else {
@@ -239,6 +259,55 @@ final class Autoload {
 			 * @param array    $after   Name => autoload value after.
 			 */
 			do_action( 'axle_runtime_doctor_autoload_changed', $targets, array_intersect_key( $before, array_flip( $targets ) ), $after );
+		}
+
+		return array(
+			'changed' => $targets,
+			'skipped' => $skipped,
+		);
+	}
+
+	/**
+	 * Turns autoload back on for options, to undo turning it off.
+	 *
+	 * @param string[] $names Option names.
+	 * @return array{changed: string[], skipped: array<string, string>} Skipped name => reason.
+	 */
+	public function enable( array $names ): array {
+		$names   = array_values( array_unique( array_filter( array_map( 'strval', $names ) ) ) );
+		$before  = $this->values( $names );
+		$on      = self::on_values();
+		$targets = array();
+		$skipped = array();
+		foreach ( $names as $name ) {
+			if ( ! isset( $before[ $name ] ) ) {
+				$skipped[ $name ] = __( 'No such option', 'axle-runtime-doctor' );
+			} elseif ( in_array( $before[ $name ], $on, true ) ) {
+				$skipped[ $name ] = __( 'Autoload is already on', 'axle-runtime-doctor' );
+			} else {
+				$targets[] = $name;
+			}
+		}
+
+		if ( $targets ) {
+			if ( function_exists( 'wp_set_option_autoload_values' ) ) {
+				wp_set_option_autoload_values( array_fill_keys( $targets, true ) );
+			} else {
+				foreach ( $targets as $name ) {
+					$value = get_option( $name );
+					delete_option( $name );
+					add_option( $name, $value, '', true );
+				}
+			}
+
+			/**
+			 * Fires after autoload was turned back on for options.
+			 *
+			 * @param string[] $options Option names.
+			 * @param array    $before  Name => autoload value before.
+			 * @param array    $after   Name => autoload value after.
+			 */
+			do_action( 'axle_runtime_doctor_autoload_restored', $targets, array_intersect_key( $before, array_flip( $targets ) ), $this->values( $targets ) );
 		}
 
 		return array(

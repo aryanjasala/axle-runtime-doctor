@@ -37,6 +37,12 @@ WP-CLI runs a different PHP from the one your visitors get: OPcache is usually o
 
 The plugin guesses your host from constants, environment variables, paths and the web server, shows the evidence, and lets you correct it. Every problem has the setting to change, where to change it on that host (WP Engine, Pressable, Kinsta, WordPress.com, WordPress VIP, Pantheon, GoDaddy, Flywheel, SiteGround, Cloudways, Hostinger, cPanel, Plesk, nginx, Apache), and a support ticket with your measured values, ready to paste.
 
+= Compare two sites =
+
+"It is only slow on production." Put production and staging side by side and see what differs. Export a report from one site, with paths, hostnames, email addresses and IP addresses replaced, and import it on the other: paste it or upload the file. Or, if both sites run the plugin, make a one-time code on one and paste it on the other, which fetches the report over https.
+
+The comparison covers every check and the PHP, OPcache and WordPress settings. Differences come first, each with a sentence on what it means. For example: "OPcache holds 2,000 files on Staging and 10,000 on Production: Staging runs out of slots first and recompiles PHP it could have kept." Imported reports are kept, named and dated, so "before the host migration" can be compared with "after". An import is read as data only: it is checked field by field and never run.
+
 = History and alerts =
 
 The checks run once a day and keep the last 30 snapshots. When a check gets worse, for example OPcache stops caching wp-content after the host moved the site, you get an email and a notice in wp-admin.
@@ -44,9 +50,9 @@ The checks run once a day and keep the last 30 snapshots. When a check gets wors
 = Also =
 
 * Site Health shows the checks that matter most, and its Info tab lists every value.
-* "Turn autoload off" on any listed option, from the screen, WP-CLI or an ability. An action fires with the values before and after, so an activity log can undo it.
+* "Turn autoload off" on any listed option, from the screen, WP-CLI or an ability, with an Undo link. Options WordPress itself needs are never switched off. An action fires with the values before and after, so an activity log can undo it too.
 * On multisite the full screen is in Network Admin, and each site sees the checks about itself.
-* Abilities for AI agents on WordPress 6.9 and later: run-checks, get-report, list-slow-queries, get-fix and disable-autoload.
+* Abilities for AI agents on WordPress 6.9 and later: run-checks, get-report, list-slow-queries, get-fix, export-report, list-imported-reports, compare-reports, disable-autoload and enable-autoload.
 
 = WP-CLI =
 
@@ -55,7 +61,14 @@ The checks run once a day and keep the last 30 snapshots. When a check gets wors
 `wp axle-runtime-doctor report`
 `wp axle-runtime-doctor history`
 `wp axle-runtime-doctor slow-queries`
-`wp axle-runtime-doctor autoload off <option>...`
+`wp axle-runtime-doctor autoload <off|on> <option>...`
+`wp axle-runtime-doctor export --file=production.json`
+`wp axle-runtime-doctor compare production.json`
+`wp axle-runtime-doctor import <file> [--name=<name>]`
+`wp axle-runtime-doctor imports`
+`wp axle-runtime-doctor remove-import <id>`
+`wp axle-runtime-doctor direct-code`
+`wp axle-runtime-doctor fetch <code>`
 `wp axle-runtime-doctor hosts`
 `wp axle-runtime-doctor settings`
 
@@ -64,6 +77,8 @@ The checks run once a day and keep the last 30 snapshots. When a check gets wors
 == External services ==
 
 The PHP patch-level check can compare your PHP version with the release list on php.net. It is **off by default**. When you turn it on in the settings, the plugin requests https://www.php.net/releases/index.php?json&version=<major> at most once a week, from the server, while the checks run. Nothing about your site is sent: the request only names the PHP major version, such as 8. php.net's terms: https://www.php.net/license/ and privacy policy: https://www.php.net/privacy.php.
+
+Direct mode, for comparing two sites, makes one request when an administrator pastes a one-time code under Compare and chooses "Fetch the report". The request goes to the site address inside the code, over https, and carries only the code's token. The other site answers with its runtime report, which has paths, hostnames, email addresses and IP addresses replaced. Nothing is sent without that action, and you can turn direct mode off with the axle_runtime_doctor_direct_enabled filter.
 
 No other external requests are made. The loopback requests go to your own site.
 
@@ -81,13 +96,17 @@ No. Nothing runs on normal page views except a tiny sample on 1 in 50 front-end 
 
 The loopback request goes to your home URL from the server. If the server cannot reach its own public address, point the probe somewhere it can with the axle_runtime_doctor_loopback_url filter, for example http://127.0.0.1.
 
+= Is an exported report safe to send? =
+
+It holds each check's verdict and a list of PHP, OPcache and WordPress settings. Paths, hostnames, email addresses and IP addresses are replaced, and check details and raw data are left out. Read the file before you send it: you know your own site best. The axle_runtime_doctor_export_replacements filter replaces other text, such as a private hostname.
+
 = Can it flush or warm OPcache? =
 
 No. Flush Opcache and OPcache Manager do that well.
 
 = What does it store? =
 
-Its settings, the last 30 snapshots (status and value per check), the latest full report, and up to 500 samples. Query digests have every value taken out, so no emails or other data end up in them. Uninstalling removes all of it.
+Its settings, the last 30 snapshots (status and value per check), the latest full report, up to 10 reports you import from other sites, and up to 500 samples. Query digests have every value taken out, so no emails or other data end up in them. Uninstalling removes all of it.
 
 == Screenshots ==
 

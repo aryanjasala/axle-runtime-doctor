@@ -152,7 +152,7 @@ final class Privacy implements Service {
 			return;
 		}
 
-		$text = __( 'Runtime Doctor checks how the server running this site is set up. It stores no data about visitors: its samples hold only counts and memory use, and the database queries it measures are stored with every value taken out. An administrator can add email addresses that get an alert when a check gets worse.', 'axle-runtime-doctor' );
+		$text = __( 'Runtime Doctor checks how the server running this site is set up. It stores no data about visitors: its samples hold only counts and memory use, and the database queries it measures are stored with every value taken out. An administrator can add email addresses that get an alert when a check gets worse. Reports exported to compare two sites have paths, hostnames, email addresses and IP addresses replaced. If an administrator uses a one-time code to fetch a report from another site, this site contacts that site once, at the address in the code.', 'axle-runtime-doctor' );
 
 		wp_add_privacy_policy_content( __( 'Axle Runtime Doctor', 'axle-runtime-doctor' ), '<p>' . esc_html( $text ) . '</p>' );
 	}
