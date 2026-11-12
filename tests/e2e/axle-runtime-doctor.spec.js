@@ -170,6 +170,8 @@ test.describe( 'Axle Runtime Doctor', () => {
 	} );
 
 	test( 'the screen has a Help tab, and the Plugins screen links to it', async ( { page } ) => {
+		// With a report stored the screen does not run the checks on load and redirect under us.
+		h.runChecks();
 		await page.goto( PAGE );
 		await page.getByRole( 'button', { name: 'Help' } ).click();
 		await expect( page.locator( '#tab-link-axle-runtime-doctor-overview' ) ).toBeVisible();
