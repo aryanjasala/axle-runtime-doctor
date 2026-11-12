@@ -714,7 +714,7 @@ final class ComparePanel implements Service {
 					) . '#ard-compare' 
 				) . '">' . esc_html__( 'Compare with this site', 'axle-runtime-doctor' ) . '<span class="screen-reader-text"> ' . esc_html( (string) $item['name'] ) . '</span></a> | ';
 			}
-			echo '<button type="button" class="button-link button-link-delete" data-ard-confirm="' . esc_attr( $dom ) . '" aria-controls="' . esc_attr( $dom ) . '" aria-expanded="false">' . esc_html__( 'Remove', 'axle-runtime-doctor' ) . '<span class="screen-reader-text"> ' . esc_html( (string) $item['name'] ) . '</span></button>';
+			echo '<button type="button" class="button button-small" data-ard-confirm="' . esc_attr( $dom ) . '" aria-controls="' . esc_attr( $dom ) . '" aria-expanded="false">' . esc_html__( 'Remove', 'axle-runtime-doctor' ) . '<span class="screen-reader-text"> ' . esc_html( (string) $item['name'] ) . '</span></button>';
 			echo '<div class="axle-confirm axle-confirm--danger" id="' . esc_attr( $dom ) . '" role="group" aria-labelledby="' . esc_attr( $dom ) . '-text" hidden>';
 			/* translators: %s: name of the report. */
 			echo '<p id="' . esc_attr( $dom ) . '-text">' . esc_html( sprintf( __( 'Remove "%s" from the saved reports? The report is deleted from this site. You can undo it for 15 minutes.', 'axle-runtime-doctor' ), (string) $item['name'] ) ) . '</p>';
