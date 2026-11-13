@@ -42,6 +42,7 @@ A site is slow and the host says everything is fine. Often the cause is runtime 
 - **Web values, not WP-CLI's**: WP-CLI, cron and abilities run the checks through a token-authenticated loopback probe, and say so when it fails
 - **History and alerts**: a daily run keeps 30 snapshots, and a check that gets worse sends an email and shows a notice
 - **Compare two sites**: "It is only slow on production." Export a report with paths, hostnames and addresses taken out, import the other site's (a file, pasted text, or a one-time code that fetches it over https), and see every check and PHP, OPcache and WordPress setting side by side, differences first, each with what it means. Imported reports are kept, named and dated, so "before the host migration" can be compared with "after"
+- **What keeps the page cache from working**: asks your home page, latest post and a page twice, as a visitor, and reads the headers. Says whether a cache answered (Cloudflare, Kinsta, SiteGround, LiteSpeed, Varnish, WP Engine, Fastly, CloudFront and more) and finds what stops one: a cookie on a page for logged-out visitors, `Cache-Control: no-store` or `private`, `Vary: Cookie`, a PHP session, `nocache_headers()`, `DONOTCACHEPAGE`. A request that traces itself names the plugin or theme when it can, says "one of these" when it cannot, and never guesses. The fix for your host and a support ticket come with it, and the result is part of the daily history and Site Health
 - Site Health tests and Info, WP-CLI, abilities for AI agents, multisite, and a filter or action for every default and event
 
 ## Install
@@ -81,13 +82,16 @@ wp axle-runtime-doctor autoload off my_plugin_cache
     <td width="50%" valign="top"><img src=".wordpress-org/screenshot-3.png" alt="History: the day OPcache stopped caching wp-content"><br><sub>History: the day OPcache stopped caching wp-content</sub></td>
     <td width="50%" valign="top"><img src=".wordpress-org/screenshot-4.png" alt="Slow queries on the key pages, grouped by shape, with the component that sent them"><br><sub>Slow queries on the key pages, grouped by shape, with the component that sent them</sub></td>
   </tr>
+  <tr>
+    <td width="50%" valign="top"><img src=".wordpress-org/screenshot-5.png" alt="The page cache test: the cookie that makes every page skip the cache, and the plugin behind it"><br><sub>The page cache test: the cookie that makes every page skip the cache, and the plugin behind it</sub></td>
+  </tr>
 </table>
 
 ## Documentation
 
 | Doc | What it covers |
 | --- | --- |
-| [Reference](docs/REFERENCE.md) | How the checks run, comparing two sites, every check, hooks, abilities, WP-CLI, data and privacy |
+| [Reference](docs/REFERENCE.md) | How the checks run, comparing two sites, the page cache test, every check, hooks, abilities, WP-CLI, data and privacy |
 | [Development](docs/DEVELOPMENT.md) | Local setup, commands and tests |
 | [Contributing](docs/CONTRIBUTING.md) | Pull requests, required checks and PR titles |
 | [Releasing](docs/RELEASING.md) | How merged pull requests become releases |
@@ -120,8 +124,9 @@ src/
 ├── Abilities.php         abilities for AI agents
 ├── Privacy.php           exporter, eraser, policy text
 ├── Compare/              export, import, compare, kept reports, direct mode
+├── PageCache/            header analysis, the scanner, the tracer, blame
 ├── Checks/               one class per check, plus Context and Registry
-├── Admin/                the screen, the Compare tab and the regression notice
+├── Admin/                the screen, the Compare and Page cache tabs, the regression notice
 ├── Health/               Site Health tests and Info
 └── Cli/                  wp axle-runtime-doctor
 assets/                   the screen's CSS and JS
@@ -148,9 +153,9 @@ Small plugins that each fill one gap in WordPress, all free with no pro version.
 | <img src="https://raw.githubusercontent.com/aryanjasala/axle-review/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Axle Review](https://github.com/aryanjasala/axle-review) | Share drafts through private links, collect outside feedback as block Notes, and know when an approval is out of date |
 | <img src="https://raw.githubusercontent.com/aryanjasala/axle-smoke-test/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Axle Smoke Test](https://github.com/aryanjasala/axle-smoke-test) | Check key pages after every update or deploy, see what broke and roll it back |
 | <img src="https://raw.githubusercontent.com/aryanjasala/block-doctor/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Block Doctor](https://github.com/aryanjasala/block-doctor) | Scan the site for broken blocks and fix them in bulk, with undo. See which posts use each block before you switch a plugin off |
-| <img src="https://raw.githubusercontent.com/aryanjasala/block-theme-ops/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Block Theme Ops](https://github.com/aryanjasala/block-theme-ops) | Find Site Editor changes that override your theme files, see the diff, reset them or send them to Git |
+| <img src="https://raw.githubusercontent.com/aryanjasala/block-theme-ops/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Block Theme Ops](https://github.com/aryanjasala/block-theme-ops) | Find Site Editor changes that override your theme files, see the diff, reset them, send them to Git, move them to another site or lock them |
 | <img src="https://raw.githubusercontent.com/aryanjasala/role-right-sizer/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Role Right-Sizer](https://github.com/aryanjasala/role-right-sizer) | Recommends the smallest role each user needs, from what they actually do |
-| <img src="https://raw.githubusercontent.com/aryanjasala/update-rehearsal/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Update Rehearsal](https://github.com/aryanjasala/update-rehearsal) | Try plugin, theme, core and PHP updates on a disposable copy of your site in WordPress Playground first |
+| <img src="https://raw.githubusercontent.com/aryanjasala/update-rehearsal/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Update Rehearsal](https://github.com/aryanjasala/update-rehearsal) | Try plugin, theme, core and PHP updates, a new plugin, or life without one, on a disposable copy of your site in WordPress Playground first |
 | <img src="https://raw.githubusercontent.com/aryanjasala/user-session-manager/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [User Session Manager](https://github.com/aryanjasala/user-session-manager) | See every device signed in, sign out one, and limit sessions per role |
 
 ## License

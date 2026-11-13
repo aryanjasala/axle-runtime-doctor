@@ -1,6 +1,6 @@
 <?php
 /**
- * Removes Axle Runtime Doctor's settings, snapshots, kept reports, samples, schedule and probe leftovers.
+ * Removes Axle Runtime Doctor's settings, snapshots, kept reports, the page cache test, samples, schedule and probe leftovers.
  *
  * @package RuntimeDoctor
  */
@@ -13,7 +13,7 @@ defined( 'WP_UNINSTALL_PLUGIN' ) || exit;
 function axle_runtime_doctor_uninstall_site(): void {
 	global $wpdb;
 
-	foreach ( array( 'axle_runtime_doctor_settings', 'axle_runtime_doctor_snapshots', 'axle_runtime_doctor_report', 'axle_runtime_doctor_samples', 'axle_runtime_doctor_php_releases', 'axle_runtime_doctor_notice', 'axle_runtime_doctor_imports' ) as $axle_runtime_doctor_option ) {
+	foreach ( array( 'axle_runtime_doctor_settings', 'axle_runtime_doctor_snapshots', 'axle_runtime_doctor_report', 'axle_runtime_doctor_samples', 'axle_runtime_doctor_php_releases', 'axle_runtime_doctor_notice', 'axle_runtime_doctor_imports', 'axle_runtime_doctor_page_cache' ) as $axle_runtime_doctor_option ) {
 		delete_option( $axle_runtime_doctor_option );
 	}
 	delete_transient( 'axle_runtime_doctor_php_files' );
@@ -29,9 +29,11 @@ function axle_runtime_doctor_uninstall_site(): void {
 // What each user saw last: a notice kept for one page view, and the Get started card.
 delete_metadata( 'user', 0, 'axle_runtime_doctor_flash', '', true );
 delete_metadata( 'user', 0, 'axle_runtime_doctor_compare_state', '', true );
+delete_metadata( 'user', 0, 'axle_runtime_doctor_cache_flash', '', true );
+delete_metadata( 'user', 0, 'axle_runtime_doctor_cache_state', '', true );
 
 if ( is_multisite() ) {
-	foreach ( array( 'axle_runtime_doctor_settings', 'axle_runtime_doctor_snapshots', 'axle_runtime_doctor_report', 'axle_runtime_doctor_samples', 'axle_runtime_doctor_php_releases', 'axle_runtime_doctor_notice', 'axle_runtime_doctor_imports' ) as $axle_runtime_doctor_option ) {
+	foreach ( array( 'axle_runtime_doctor_settings', 'axle_runtime_doctor_snapshots', 'axle_runtime_doctor_report', 'axle_runtime_doctor_samples', 'axle_runtime_doctor_php_releases', 'axle_runtime_doctor_notice', 'axle_runtime_doctor_imports', 'axle_runtime_doctor_page_cache' ) as $axle_runtime_doctor_option ) {
 		delete_site_option( $axle_runtime_doctor_option );
 	}
 

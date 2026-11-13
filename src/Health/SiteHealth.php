@@ -8,7 +8,9 @@
 namespace AryanX\Axle\RuntimeDoctor\Health;
 
 use AryanX\Axle\RuntimeDoctor\Admin\Page;
+use AryanX\Axle\RuntimeDoctor\Checks\PageCache;
 use AryanX\Axle\RuntimeDoctor\Checks\Registry;
+use AryanX\Axle\RuntimeDoctor\PageCache\Scanner;
 use AryanX\Axle\RuntimeDoctor\History;
 use AryanX\Axle\RuntimeDoctor\Result;
 use AryanX\Axle\RuntimeDoctor\Runner;
@@ -71,7 +73,7 @@ final class SiteHealth implements Service {
 	 * @return string[]
 	 */
 	public static function tests(): array {
-		$tests = array( 'opcache_coverage', 'opcache_memory', 'opcache_restarts', 'object_cache_roundtrip', 'php_branch', 'php_input_vars', 'cron_mode', 'fs_uploads_php', 'db_version' );
+		$tests = array( 'opcache_coverage', 'opcache_memory', 'opcache_restarts', 'object_cache_roundtrip', 'php_branch', 'php_input_vars', 'cron_mode', 'fs_uploads_php', 'db_version', 'page_cache' );
 		if ( version_compare( (string) get_bloginfo( 'version' ), '7.0-alpha', '<' ) ) {
 			array_unshift( $tests, 'opcache_enabled' );
 		}
@@ -117,14 +119,30 @@ final class SiteHealth implements Service {
 	 * @return array Site Health result.
 	 */
 	public function run( string $id ): array {
-		$report = $this->runner->run_local(
-			array(
-				'checks' => array( $id ),
-				'save'   => false,
-				'source' => 'site-health',
-			)
-		);
-		$check  = $this->registry->get( $id );
+		$check = $this->registry->get( $id );
+		if ( 'page_cache' === $id ) {
+			// The page cache test sends up to nine requests. Site Health reads the last test, from the daily run or the screen.
+			$scan   = Scanner::latest();
+			$stored = $scan ? PageCache::from_scan( $scan ) : null;
+			$report = array(
+				'results' => array(
+					$id => $stored ? $stored->to_array() : array(
+						'status'  => Result::GOOD,
+						'summary' => __( 'The page cache has not been tested yet', 'axle-runtime-doctor' ),
+						'value'   => '',
+						'why'     => __( 'The test asks your key pages twice as a visitor and shows whether a cache answers. It runs once a day, and you can run it now from Runtime Doctor.', 'axle-runtime-doctor' ),
+					),
+				),
+			);
+		} else {
+			$report = $this->runner->run_local(
+				array(
+					'checks' => array( $id ),
+					'save'   => false,
+					'source' => 'site-health',
+				)
+			);
+		}
 		$result = $report['results'][ $id ] ?? null;
 		if ( ! is_array( $result ) ) {
 			$result = array(

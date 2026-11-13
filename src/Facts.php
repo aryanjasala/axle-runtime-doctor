@@ -757,6 +757,15 @@ final class Facts {
 	}
 
 	/**
+	 * The key pages asked twice as a visitor: what answered and what stops a cache.
+	 *
+	 * @return array|null time and pages. Null when the test is off.
+	 */
+	private function fact_page_cache(): ?array {
+		return PageCache\Scanner::scan();
+	}
+
+	/**
 	 * CDNs and firewalls named by response headers.
 	 *
 	 * @param array $headers Lowercase header name => value.

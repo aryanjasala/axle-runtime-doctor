@@ -9,6 +9,9 @@
  *   report text or code on the Compare tab.
  * - action axleRuntimeDoctor.checksFinished ( report ): the checks ran from the
  *   screen; fires before the page reloads with the new results.
+ * - action axleRuntimeDoctor.pageCacheStarted ( text ): the page cache test was
+ *   started from the Page cache tab; the page reloads when it is done. The text is
+ *   what the screen tells assistive technology.
  */
 ( function () {
 	'use strict';
@@ -170,7 +173,12 @@
 				button.disabled = true;
 			}, 0 );
 		}
-		announce( __( 'Fetching the report from the other site.', 'axle-runtime-doctor' ) );
+		const busyText = form.getAttribute( 'data-ard-busy-text' ) || __( 'Fetching the report from the other site.', 'axle-runtime-doctor' );
+		announce( busyText );
+		const h = hooks();
+		if ( h && form.classList.contains( 'ard-cache-form' ) ) {
+			h.doAction( 'axleRuntimeDoctor.pageCacheStarted', busyText );
+		}
 	} );
 
 	// Say what the last action did, for people who cannot see the notice.

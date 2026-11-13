@@ -118,6 +118,74 @@ final class IntegrationsTest extends DoctorTestCase {
 		$this->assertStringContainsString( '#ard-check-fs_uploads_php', $result['actions'] );
 	}
 
+	private function cache_scan( string $answered ): array {
+		return array(
+			'time'  => 100,
+			'pages' => array(
+				array(
+					'url'      => 'https://example.com/',
+					'status'   => 200,
+					'via'      => 'public',
+					'cold_ms'  => 200,
+					'warm_ms'  => 30,
+					'cold'     => 'miss',
+					'answered' => $answered,
+					'by'       => array( 'Cloudflare' ),
+					'signals'  => array( 'cf-cache-status: ' . strtoupper( $answered ) ),
+					'dynamic'  => false,
+					'blockers' => 'hit' === $answered ? array() : array(
+						array(
+							'type'     => 'cookie',
+							'severity' => 'blocks',
+							'names'    => array( 'a' ),
+							'detail'   => 'The page sets a cookie for a visitor who is not logged in: a.',
+						),
+					),
+					'cookies'  => array(),
+					'trace'    => null,
+					'error'    => '',
+				),
+			),
+		);
+	}
+
+	public function test_site_health_reads_the_last_page_cache_test_and_sends_no_request(): void {
+		Functions\when( 'get_bloginfo' )->justReturn( '7.1' );
+		Functions\expect( 'wp_remote_get' )->never();
+		$this->assertContains( 'page_cache', SiteHealth::tests() );
+		$health = new SiteHealth( $this->runner, $this->history, $this->registry );
+
+		$none = $health->run( 'page_cache' );
+		$this->assertSame( 'good', $none['status'] );
+		$this->assertSame( 'The page cache has not been tested yet', $none['label'] );
+
+		$this->options['axle_runtime_doctor_page_cache'] = $this->cache_scan( 'miss' );
+		$bad                                              = $health->run( 'page_cache' );
+		$this->assertSame( 'critical', $bad['status'] );
+		$this->assertSame( 'axle_runtime_doctor_page_cache', $bad['test'] );
+		$this->assertStringContainsString( '#ard-check-page_cache', $bad['actions'] );
+
+		$this->options['axle_runtime_doctor_page_cache'] = $this->cache_scan( 'hit' );
+		$this->assertSame( 'good', $health->run( 'page_cache' )['status'] );
+	}
+
+	public function test_the_page_cache_ability_returns_the_last_test_or_says_there_is_none(): void {
+		$abilities = $this->abilities();
+		$empty     = $abilities->get_page_cache();
+		$this->assertFalse( $empty['tested'] );
+		$this->assertSame( array(), $empty['pages'] );
+
+		$this->options['axle_runtime_doctor_page_cache'] = $this->cache_scan( 'miss' );
+		$last                                             = $abilities->get_page_cache( array() );
+		$this->assertTrue( $last['tested'] );
+		$this->assertSame( 'critical', $last['status'] );
+		$this->assertSame( 'cookie (a)', $last['pages'][0]['stops'] );
+		$this->assertSame( '0 of 1 pages answered from a cache', $last['value'] );
+
+		Filters\expectApplied( 'axle_runtime_doctor_page_cache_enabled' )->once()->andReturn( false );
+		$this->assertFalse( $abilities->get_page_cache( array( 'refresh' => true ) )['tested'] );
+	}
+
 	public function test_debug_information_lists_the_latest_report(): void {
 		$health = new SiteHealth( $this->runner, $this->history, $this->registry );
 		$empty  = $health->debug_information( array() );
@@ -153,7 +221,7 @@ final class IntegrationsTest extends DoctorTestCase {
 		);
 		$this->abilities()->register_abilities();
 
-		$this->assertSame( array( 'axle-runtime-doctor/run-checks', 'axle-runtime-doctor/get-report', 'axle-runtime-doctor/list-slow-queries', 'axle-runtime-doctor/get-fix', 'axle-runtime-doctor/export-report', 'axle-runtime-doctor/list-imported-reports', 'axle-runtime-doctor/compare-reports', 'axle-runtime-doctor/disable-autoload', 'axle-runtime-doctor/enable-autoload' ), array_keys( $registered ) );
+		$this->assertSame( array( 'axle-runtime-doctor/run-checks', 'axle-runtime-doctor/get-report', 'axle-runtime-doctor/list-slow-queries', 'axle-runtime-doctor/get-page-cache', 'axle-runtime-doctor/get-fix', 'axle-runtime-doctor/export-report', 'axle-runtime-doctor/list-imported-reports', 'axle-runtime-doctor/compare-reports', 'axle-runtime-doctor/disable-autoload', 'axle-runtime-doctor/enable-autoload' ), array_keys( $registered ) );
 		$this->assertTrue( $registered['axle-runtime-doctor/run-checks']['meta']['annotations']['readonly'] );
 		$this->assertSame(
 			array(
@@ -164,7 +232,7 @@ final class IntegrationsTest extends DoctorTestCase {
 			$registered['axle-runtime-doctor/disable-autoload']['meta']['annotations']
 		);
 		$this->assertTrue( $registered['axle-runtime-doctor/get-fix']['meta']['mcp']['public'] );
-		foreach ( array( 'export-report', 'list-imported-reports', 'compare-reports' ) as $name ) {
+		foreach ( array( 'export-report', 'list-imported-reports', 'compare-reports', 'get-page-cache' ) as $name ) {
 			$this->assertTrue( $registered[ 'axle-runtime-doctor/' . $name ]['meta']['annotations']['readonly'], $name );
 		}
 		$this->assertFalse( $registered['axle-runtime-doctor/enable-autoload']['meta']['annotations']['readonly'] );

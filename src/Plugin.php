@@ -10,6 +10,7 @@ namespace AryanX\Axle\RuntimeDoctor;
 use AryanX\Axle\RuntimeDoctor\Admin\ComparePanel;
 use AryanX\Axle\RuntimeDoctor\Admin\Notice;
 use AryanX\Axle\RuntimeDoctor\Admin\Page;
+use AryanX\Axle\RuntimeDoctor\Admin\PageCachePanel;
 use AryanX\Axle\RuntimeDoctor\Checks\Registry;
 use AryanX\Axle\RuntimeDoctor\Cli\Command;
 use AryanX\Axle\RuntimeDoctor\Compare\Direct;
@@ -177,15 +178,18 @@ final class Plugin {
 	 */
 	private function register(): void {
 		Probe::maybe_capture();
+		PageCache\Tracer::maybe_start();
 
 		$compare  = new ComparePanel( $this->history, $this->library );
+		$cache    = new PageCachePanel( $this->fixes, $this->hosts );
 		$services = array(
 			new Probe(),
 			$this->sampler,
 			new Rest( $this->runner, $this->history ),
 			new Scheduler( $this->runner ),
-			new Page( $this->settings, $this->runner, $this->history, $this->fixes, $this->hosts, $this->autoload, $this->alerts, $this->registry, $compare ),
+			new Page( $this->settings, $this->runner, $this->history, $this->fixes, $this->hosts, $this->autoload, $this->alerts, $this->registry, $compare, $cache ),
 			$compare,
+			$cache,
 			new Direct( $this->runner, $this->history ),
 			new Notice( $this->alerts ),
 			new SiteHealth( $this->runner, $this->history, $this->registry ),
