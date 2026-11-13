@@ -33,6 +33,7 @@ final class Registry {
 			'php'          => __( 'PHP', 'axle-runtime-doctor' ),
 			'database'     => __( 'Database', 'axle-runtime-doctor' ),
 			'cron'         => __( 'Cron and loopback', 'axle-runtime-doctor' ),
+			'page_cache'   => __( 'Page cache', 'axle-runtime-doctor' ),
 			'filesystem'   => __( 'Filesystem', 'axle-runtime-doctor' ),
 		);
 	}
@@ -73,6 +74,7 @@ final class Registry {
 			new CronMode(),
 			new CronEvents(),
 			new Loopback(),
+			new PageCache(),
 			new FsConfig(),
 			new FsUploadsPhp(),
 			new FsOwnership(),

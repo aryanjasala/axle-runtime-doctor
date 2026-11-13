@@ -450,6 +450,238 @@
 			]
 		},
 		{
+			"name": "Page cache, first visit before any test",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=page-cache",
+			"steps": [
+				{
+					"waitFor": ".ard-started"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Page cache, a cookie stops every page, all details open",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"js": "helpers.js",
+					"call": "seedPageCache",
+					"args": [
+						"blocked"
+					]
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=page-cache#ard-cache-result",
+			"steps": [
+				{
+					"waitFor": ".ard-cache-pages"
+				},
+				{
+					"evaluate": "document.querySelectorAll( '.ard-wrap details' ).forEach( ( d ) => { d.open = true; } )"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Page cache, answered from a cache",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"js": "helpers.js",
+					"call": "seedPageCache",
+					"args": [
+						"hit"
+					]
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=page-cache",
+			"steps": [
+				{
+					"waitFor": ".ard-cache-pages .axle-badge--good"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Page cache, pages that could not be tested",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"js": "helpers.js",
+					"call": "seedPageCache",
+					"args": [
+						"failed"
+					]
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=page-cache",
+			"steps": [
+				{
+					"waitFor": ".ard-cache-pages"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Page cache, test running",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"js": "helpers.js",
+					"call": "seedPageCache",
+					"args": [
+						"hit"
+					]
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=page-cache",
+			"steps": [
+				{
+					"waitFor": ".ard-cache-form"
+				},
+				{
+					"evaluate": "document.querySelector( '.ard-cache-form' ).addEventListener( 'submit', ( event ) => event.preventDefault(), true )"
+				},
+				{
+					"click": ".ard-cache-form button[type=submit]"
+				},
+				{
+					"waitFor": ".ard-cache-form[aria-busy=true] .spinner.is-active"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Page cache, notice after a test",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				},
+				{
+					"js": "helpers.js",
+					"call": "seedPageCache",
+					"args": [
+						"blocked"
+					]
+				},
+				[
+					"eval",
+					"update_user_meta( 1, 'axle_runtime_doctor_cache_flash', array( 'type' => 'warning', 'text' => 'A cache is in place, but something on every page makes it skip the page. 0 of 2 pages answered from a cache.' ) );"
+				]
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=page-cache",
+			"steps": [
+				{
+					"waitFor": ".notice-warning"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Page cache, help tab open",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=page-cache",
+			"include": [
+				"#contextual-help-wrap"
+			],
+			"steps": [
+				{
+					"click": "#contextual-help-link"
+				},
+				{
+					"waitFor": "#contextual-help-wrap:not([hidden])"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			]
+		},
+		{
 			"name": "Runtime Doctor, slow queries",
 			"setup": [
 				{

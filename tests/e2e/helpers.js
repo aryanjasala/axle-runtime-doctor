@@ -4,7 +4,7 @@ const { spawnSync } = require( 'child_process' );
 const { COMPOSE_DIR } = require( './utils/config' );
 const { wp, wpEval } = require( './utils/wp-cli' );
 
-const OPTIONS = [ 'axle_runtime_doctor_settings', 'axle_runtime_doctor_snapshots', 'axle_runtime_doctor_report', 'axle_runtime_doctor_samples', 'axle_runtime_doctor_notice', 'axle_runtime_doctor_imports', 'ard_e2e_mail', 'ard_e2e_loopback', 'ard_e2e_direct' ];
+const OPTIONS = [ 'axle_runtime_doctor_settings', 'axle_runtime_doctor_snapshots', 'axle_runtime_doctor_report', 'axle_runtime_doctor_samples', 'axle_runtime_doctor_notice', 'axle_runtime_doctor_imports', 'ard_e2e_mail', 'ard_e2e_loopback', 'ard_e2e_direct', 'ard_e2e_cache', 'axle_runtime_doctor_page_cache' ];
 const FIXTURES = '/var/www/html/wp-content/plugins/axle-runtime-doctor/tests/e2e/fixtures';
 
 /**
@@ -76,7 +76,7 @@ function reset() {
 	}
 	wpRun( 'transient', 'delete', 'axle_runtime_doctor_import_trash', '--network' );
 	wpRun( 'transient', 'delete', 'axle_runtime_doctor_import_trash' );
-	for ( const key of [ 'axle_runtime_doctor_flash', 'axle_runtime_doctor_compare_state' ] ) {
+	for ( const key of [ 'axle_runtime_doctor_flash', 'axle_runtime_doctor_compare_state', 'axle_runtime_doctor_cache_flash', 'axle_runtime_doctor_cache_state' ] ) {
 		wpRun( 'user', 'meta', 'delete', '1', key );
 	}
 }
@@ -154,4 +154,41 @@ function deleteBigMenu( menu ) {
 	` );
 }
 
-module.exports = { wpRun, webRoot, reloadPhp, blacklistWpContent, unblacklist, installFixture, reset, report, runChecks, wpOlderThan, bigMenu, deleteBigMenu, OPTIONS };
+/**
+ * Stores a page cache test result, so a screen can be checked without sending requests.
+ *
+ * @param {string} kind blocked (a cookie, traced), hit (a cache answers) or failed (nothing could be tested).
+ */
+function seedPageCache( kind ) {
+	const page = {
+		url: 'http://localhost:8918/',
+		status: 200,
+		via: 'public',
+		cold_ms: 420,
+		warm_ms: 380,
+		cold: 'none',
+		answered: 'none',
+		by: [],
+		signals: [],
+		dynamic: false,
+		blockers: [],
+		cookies: [],
+		trace: null,
+		error: '',
+	};
+	let pages;
+	if ( 'hit' === kind ) {
+		pages = [ { ...page, cold: 'miss', answered: 'hit', by: [ 'Kinsta cache' ], signals: [ 'x-kinsta-cache: HIT' ], warm_ms: 35 }, { ...page, url: 'http://localhost:8918/hello-world/', cold: 'miss', answered: 'hit', by: [ 'Kinsta cache' ], warm_ms: 41 } ];
+	} else if ( 'failed' === kind ) {
+		pages = [ { ...page, status: 0, error: 'cURL error 28: Operation timed out after 10001 milliseconds' }, { ...page, url: 'http://localhost:8918/about/', error: 'The page redirects to http://localhost:8918/about-us/. Use the final address.' } ];
+	} else {
+		const blocker = { type: 'cookie', severity: 'blocks', names: [ 'wp_woocommerce_session_abc' ], detail: 'The page sets a cookie for a visitor who is not logged in: wp_woocommerce_session_abc. Most caches do not store a response that sets a cookie.' };
+		const trace = { ran: true, reached: true, signals: [ { type: 'cookie', name: 'wp_woocommerce_session_abc', where: 'init', suspects: [ 'plugin:woocommerce' ], certain: false }, { type: 'nocache_headers', name: 'nocache_headers()', where: 'template_redirect:start', suspects: [ 'plugin:bad-cache' ], certain: true } ] };
+		pages = [ { ...page, cold: 'miss', answered: 'miss', by: [ 'Pressable or WordPress.com edge cache' ], signals: [ 'x-ac: 3.fra _atomic_fra BYPASS' ], cookies: [ 'wp_woocommerce_session_abc' ], blockers: [ blocker ], trace }, { ...page, url: 'http://localhost:8918/hello-world/', cold: 'miss', answered: 'miss', by: [ 'Pressable or WordPress.com edge cache' ], signals: [ 'x-ac: 3.fra _atomic_fra BYPASS' ], cookies: [ 'wp_woocommerce_session_abc' ], blockers: [ blocker ] } ];
+	}
+	const scan = { time: Math.floor( Date.now() / 1000 ) - 120, pages };
+	wpEval( `update_option( 'axle_runtime_doctor_page_cache', json_decode( '${ JSON.stringify( scan ).replace( /\\/g, '\\\\' ).replace( /'/g, "\\'" ) }', true ), false );` );
+	return '';
+}
+
+module.exports = { seedPageCache, wpRun, webRoot, reloadPhp, blacklistWpContent, unblacklist, installFixture, reset, report, runChecks, wpOlderThan, bigMenu, deleteBigMenu, OPTIONS };

@@ -612,6 +612,129 @@
 			]
 		}
 	},
+	"page_cache": {
+		"ask": "tell me why the page cache is skipped for visitors who are not logged in on this site, and which cookie, header or rule causes it (the response headers are listed below)",
+		"ticket": "Hello,\n\nOn {site} the page cache does not answer visitors. The runtime check says: {summary}.\n\nMeasured: {value}\nWhat the pages send: {data.found}\n{details}\nCould you {ask}? Please let me know what you changed, so I can run the check again.\n\nThanks",
+		"generic": {
+			"setting": "Cookies and headers on pages for visitors who are not logged in",
+			"where": "The plugin or theme that sets them, and the cache's exclusion rules",
+			"steps": [
+				"Open the page logged out (a private window) and look at the response headers in the browser's network tab: Set-Cookie, Cache-Control, Vary.",
+				"Find what sets each cookie or header (the lines under this result name the plugin when the trace could) and turn that feature off on public pages, or load it with JavaScript instead of PHP.",
+				"A PHP session (PHPSESSID) on public pages is almost always a plugin or theme calling session_start(). Remove it or limit it to the pages that need it.",
+				"Then run the check again. The second request should come back as a hit."
+			]
+		},
+		"wpengine": {
+			"setting": "Cache exclusions and the cookies the site sets",
+			"where": "WP Engine User Portal > environment > Page performance, and the plugin that sets the cookie",
+			"steps": [
+				"WP Engine does not serve a cached page when the response sets a cookie or sends no-store. Remove that first: it is the plugin or theme named under this result.",
+				"Check the environment's cache exclusions in the User Portal for rules that cover public pages.",
+				"If you cannot find the source, send the support ticket below."
+			]
+		},
+		"pressable": {
+			"setting": "Edge cache",
+			"where": "Pressable support, and the plugin that sets the cookie",
+			"steps": [
+				"Pressable's edge cache skips a page that sets a cookie or sends no-store. Remove the source first (named under this result when the trace could).",
+				"If the headers look clean and the page is still not cached, ask support. Paste the support ticket."
+			]
+		},
+		"kinsta": {
+			"setting": "Kinsta Cache and cache exclusions",
+			"where": "MyKinsta > Sites > your site > Cache",
+			"steps": [
+				"Kinsta Cache does not store a response that sets a cookie. Remove the source first (named under this result when the trace could).",
+				"In MyKinsta, open Cache and check the bypass rules and the cookies listed for exclusion.",
+				"If the headers look clean and the page is still not cached, ask support."
+			]
+		},
+		"siteground": {
+			"setting": "SuperCacher and SG Optimizer exclusions",
+			"where": "Site Tools > Speed > Caching, and the SG Optimizer plugin",
+			"steps": [
+				"SuperCacher skips a page that sets a cookie. Remove the source first (named under this result when the trace could).",
+				"Check the SG Optimizer exclusions and turn Dynamic Caching on in Site Tools > Speed > Caching.",
+				"Purge the cache, then run the check again."
+			]
+		},
+		"cloudways": {
+			"setting": "Varnish and Breeze",
+			"where": "Cloudways > Application > Varnish Settings, and the Breeze plugin",
+			"steps": [
+				"Varnish does not store a response that sets a cookie. Remove the source first (named under this result when the trace could).",
+				"Under Varnish Settings, check the exclusion rules and that Varnish is on.",
+				"Purge Varnish, then run the check again."
+			]
+		},
+		"hostinger": {
+			"setting": "LiteSpeed Cache",
+			"where": "hPanel > Websites > Dashboard > Speed, and the LiteSpeed Cache plugin",
+			"steps": [
+				"LiteSpeed does not store a page that sets a cookie or sends no-store. Remove the source first (named under this result when the trace could).",
+				"In the LiteSpeed Cache plugin, check Cache > Excludes for cookies and query strings that cover public pages.",
+				"Purge all, then run the check again."
+			]
+		},
+		"pantheon": {
+			"setting": "Global CDN and cookies",
+			"where": "Pantheon site dashboard, and the plugin that sets the cookie",
+			"steps": [
+				"Pantheon's Global CDN does not cache a response that sets a cookie, except cookies whose names start with STYXKEY. Remove the source first.",
+				"A PHP session (PHPSESSID) on public pages is almost always session_start() in a plugin or theme. Remove it from public pages."
+			]
+		},
+		"wpcom": {
+			"setting": "Edge cache",
+			"where": "WordPress.com support, and the plugin that sets the cookie",
+			"steps": [
+				"The edge cache skips a page that sets a cookie or sends no-store. Remove the source first (named under this result when the trace could).",
+				"If the headers look clean and the page is still not cached, ask support. Paste the support ticket."
+			]
+		},
+		"vip": {
+			"setting": "Page cache",
+			"where": "The code that sets the cookie or header",
+			"steps": [
+				"The VIP edge cache skips a page that sets a cookie or sends no-store. Fix it in the code named under this result, or set the cookie from JavaScript.",
+				"If you need a cookie on public pages, ask VIP support whether it can be listed as one the cache ignores."
+			]
+		},
+		"godaddy": {
+			"setting": "Managed WordPress cache",
+			"where": "GoDaddy Managed WordPress > Settings, and the plugin that sets the cookie",
+			"steps": [
+				"The page cache skips a response that sets a cookie. Remove the source first (named under this result when the trace could).",
+				"Use Flush Cache in the dashboard, then run the check again."
+			]
+		},
+		"flywheel": {
+			"setting": "Flywheel cache",
+			"where": "Flywheel dashboard > Advanced > Cache, and the plugin that sets the cookie",
+			"steps": [
+				"The cache skips a response that sets a cookie. Remove the source first (named under this result when the trace could).",
+				"Clear the cache in the dashboard, then run the check again."
+			]
+		},
+		"nginx": {
+			"setting": "fastcgi_cache bypass rules",
+			"where": "The nginx server block of the site",
+			"steps": [
+				"A fastcgi_cache setup skips a page when fastcgi_cache_bypass or fastcgi_no_cache match, and it does not store a response that sets a cookie unless fastcgi_ignore_headers lists Set-Cookie.",
+				"Check those directives, and the cookie names in the rule. Add the header add_header X-Cache-Status $upstream_cache_status; to see hit, miss and bypass.",
+				"Reload nginx, then run the check again."
+			]
+		},
+		"apache": {
+			"setting": "A cache plugin or a Varnish rule",
+			"where": "The cache plugin's settings, or the Varnish VCL",
+			"steps": [
+				"Apache itself does not cache pages. Use a page cache plugin, or put Varnish in front, and remove the cookie or header that stops it (named under this result when the trace could)."
+			]
+		}
+	},
 	"fs_config": {
 		"ask": "set wp-config.php to mode 640 (or 600)",
 		"generic": {

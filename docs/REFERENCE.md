@@ -8,6 +8,7 @@ Every check runs inside a web request, because WP-CLI runs a different PHP from 
 - **WP-CLI, the daily run from a system cron, and abilities called from WP-CLI** issue a single-use token (stored hashed, valid 60 seconds) and call `POST /axle-runtime-doctor/v1/probe` on the site itself. The probe runs the checks and returns the report. When the site cannot reach itself, WP-CLI says so, runs what it can in its own PHP, and marks the checks that need the web server.
 - **The object cache roundtrip** writes a random key in one request and reads it in a second probe request.
 - **OPcache coverage** asks `opcache_is_script_cached()` about files every request includes: `wp-includes/plugin.php`, this plugin's main file, the theme's `functions.php` and the first must-use plugin. Core cached and wp-content not cached in two requests in a row is critical. Files changed in the last few seconds are left out, as OPcache does not cache those yet. When `opcache.restrict_api` hides OPcache from the site, the result is inferred from timing and labelled so.
+- **The page cache test** asks the home page, the latest post and a page twice with no cookies, through the public address first, so a CDN in front of the site is part of the test. It falls back to the loopback address and says so. See the section below.
 - **Slow queries** load the key pages (home, latest post, latest page, biggest category, a search) with `SAVEQUERIES` on for that request only, and group the queries by shape with every literal taken out.
 
 Loopback requests go to the home URL. Servers that cannot reach their own public address can point them elsewhere with `axle_runtime_doctor_loopback_url`.
@@ -28,6 +29,24 @@ What an export holds: each check's id, label, status, summary, value and expecte
 An import is read as data only. The text is cut off above 256 KB before it is decoded, decoded with a depth limit, never unserialized or run, and rebuilt from the fields this plugin knows: ids, statuses and groups are checked against lists, every string is stripped of markup and cut to length, and unknown fields are dropped. Up to 10 reports are kept (filterable), named and dated, and each can be removed. A removed report can be put back for 15 minutes.
 
 **One-time codes.** Site A makes a code, site B pastes it. The code holds A's address and a random token, plus a checksum that catches typos and cut-off pastes. A keeps only a hash of the token, accepts it once, and stops accepting it after 10 minutes (filterable). B calls `GET /wp-json/axle-runtime-doctor/v1/share` over https with the token in the `X-Axle-Runtime-Doctor-Probe` header, through the safe HTTP functions, so private and local addresses are refused. Turn it off with the `axle_runtime_doctor_direct_enabled` filter.
+
+## What keeps the page cache from working
+
+The Page cache tab, `wp axle-runtime-doctor page-cache` and the `page_cache` check all run one test.
+
+1. Each key page (home, latest post, a page; filterable) is requested twice in a row, as a visitor: no cookies, no cache-busting header. The second answer says whether a cache holds the page.
+2. The headers are read for a hit or a miss. Known are `CF-Cache-Status`, `X-Cache`, `X-Cache-Status`, `X-Proxy-Cache`, `X-Kinsta-Cache`, `X-LiteSpeed-Cache`, `X-Hcdn-Cache-Status`, `X-Ac`, `CDN-Cache`, `X-Varnish`, `X-Cache-Group`, `X-FastCGI-Cache`, `X-Rocket-Nginx-Serving-Time` and `Age`. A chain such as `MISS, HIT` is read from its last entry. The list is filterable.
+3. Each page is checked for what stops a cache: a `Set-Cookie` on a page for a visitor who is not logged in (cookie names only, never values), `PHPSESSID` or the headers of `session_start()`, `Cache-Control` with `no-store`, `private`, `no-cache` or `max-age=0`, `Vary: Cookie` or `Vary: *`, and an `Expires` date in the past.
+4. A page that no cache answered is requested once more, with a single-use token and a new query string, and traces itself. The tracer takes a snapshot of the response (cookies, cache headers, `DONOTCACHEPAGE`, a started session) around nine WordPress hooks. PHP has no hook for `setcookie()`, `header()` or `define()`, so a change is blamed on the window it appeared in:
+   - A call to `nocache_headers()` is seen directly (WordPress filters it, so the caller is in the backtrace). The plugin or theme is named for sure.
+   - A cookie, header, session or `DONOTCACHEPAGE` that appeared during a hook is blamed on the plugins and themes that have callbacks on that hook. With one candidate the result says "probably", with several "one of these", and with none it says it cannot name a plugin.
+   - A change that appeared while the plugin files loaded, or between two hooks, cannot be traced, and the result says so.
+   - A cookie name that matches a known plugin (WooCommerce, WPML and a few more, filterable) adds "the name points at", marked as coming from the name.
+5. `DONOTCACHEPAGE` sends no header, so only the trace finds it. Cache plugins such as WP Super Cache, W3 Total Cache and WP Rocket skip a page that defines it.
+
+The result is critical when a cache is in place and every page skips it, recommended when some pages skip it, when a cache did not answer the second request, or when pages carry cookies or headers that would stop a cache that was not detected (marked inferred), and good when a cache answered every page. A cache that answered despite a cookie is good, and the cookie is listed as not stopping it here. The tracing request is skipped for a page that was a hit. The tracer runs only on a request that carries a valid token, and costs nothing on any other request.
+
+Up to 6 pages and 2 traces are requested (so at most 14 requests), each with a 10 second timeout, and the test stops starting new pages after 20 seconds, so it fits in one web request. The last test is stored in `axle_runtime_doctor_page_cache` and read by Site Health, so Site Health never sends a request itself. The daily run and any full run refresh it and keep its status in the history.
 
 ## Checks
 
@@ -62,6 +81,7 @@ An import is read as data only. The text is cut off above 256 KB before it is de
 | `cron_mode` | Cron and loopback | `DISABLE_WP_CRON` and the oldest due event over 15 minutes late | events late with WP-Cron |
 | `cron_events` | Cron and loopback | | duplicate events (info: events nothing handles) |
 | `loopback` | Cron and loopback | a firewall challenge | through a CDN or firewall, or over 1,000 ms |
+| `page_cache` | Page cache | a cache is in place and every page skips it | some pages skip it, a cache did not answer the second request, or cookies and headers would stop a cache that was not detected (inferred) |
 | `fs_config` | Filesystem | | `wp-config.php` readable by everyone |
 | `fs_uploads_php` | Filesystem | PHP files in uploads | |
 | `fs_ownership` | Filesystem | | PHP is not the file owner, or `FS_METHOD` is not `direct` |
@@ -89,6 +109,14 @@ Every threshold can be changed on the Settings tab or with `axle_runtime_doctor_
 | `axle_runtime_doctor_thresholds` | `( array $thresholds )`. `opcache_memory_pct`, `opcache_strings_pct`, `opcache_keys_pct`, `opcache_hit_rate`, `object_hit_rate`, `autoload_single_kb`, `cron_late_minutes`, `loopback_ms`, `disk_free_mb`, `eol_warning_days`, `bootstrap_ms` |
 | `axle_runtime_doctor_sample_rate` | `( int $rate )`. Sample 1 in N front-end requests. 0 turns sampling off. Default 50 |
 | `axle_runtime_doctor_samples_max` | `( int $max )`. Samples kept. Default 500 |
+| `axle_runtime_doctor_page_cache_enabled` | `( bool $enabled )`. Whether the page cache test runs. Default true |
+| `axle_runtime_doctor_page_cache_urls` | `( string[] $urls )`. Pages the page cache test loads: home, the latest post, a page. Only this site's addresses, at most 6 |
+| `axle_runtime_doctor_page_cache_headers` | `( array $headers )`. Lowercase header name => who sets it. The headers that say a cache answered |
+| `axle_runtime_doctor_page_cache_cookie_hints` | `( array $hints )`. Regular expression => what sets it. Cookie names that point at a plugin |
+| `axle_runtime_doctor_page_cache_timeout` | `( int $seconds )`. Each request of the test. Default 10. 3 to 30 |
+| `axle_runtime_doctor_page_cache_budget` | `( int $seconds )`. How long the whole test runs before it skips the pages it has not started. Default 20. 5 to 120 |
+| `axle_runtime_doctor_page_cache_trace_max` | `( int $max )`. Pages that get a tracing request. Default 2. 0 to 5. 0 turns tracing off |
+| `axle_runtime_doctor_page_cache_public` | `( bool $public )`. Try the public address first, which tests a CDN in front of the site. Default true |
 | `axle_runtime_doctor_probe_urls` | `( string[] $urls )`. Pages the slow query check loads. At most 10 |
 | `axle_runtime_doctor_slow_query_threshold_ms` | `( float $ms )`. A query this slow counts as slow. Default 50 |
 | `axle_runtime_doctor_snapshots_to_keep` | `( int $keep )`. Default 30 |
@@ -132,6 +160,8 @@ Every threshold can be changed on the Settings tab or with `axle_runtime_doctor_
 | `axle_runtime_doctor_direct_code_created` | `( int $expires )`. A one-time code was made |
 | `axle_runtime_doctor_direct_fetched` | `( string $origin, array $document )`. A report was fetched from another site |
 | `axle_runtime_doctor_direct_fetch_failed` | `( WP_Error $error, string $origin )`. Direct mode could not fetch a report |
+| `axle_runtime_doctor_page_cache_started` | `( string[] $urls )`. Before the page cache test loads the pages |
+| `axle_runtime_doctor_page_cache_finished` | `( array $scan )`. After the test: `time` and `pages` (`url`, `status`, `via`, `answered`, `by`, `signals`, `blockers`, `cookies`, `trace`, `error`) |
 | `axle_runtime_doctor_probe_failed` | `( WP_Error $error, string $mode, string $url )`. A loopback probe failed |
 | `axle_runtime_doctor_settings_saved` | `( array $settings )`. After the settings are saved |
 
@@ -143,6 +173,7 @@ The screen's script reads these through `wp.hooks` on each use, so scripts loade
 | --- | --- | --- |
 | `axleRuntimeDoctor.ticketText` | filter | `( text, checkId, hostId )`. The support ticket "Copy support ticket" puts on the clipboard. It does not run for the report text or code on the Compare tab |
 | `axleRuntimeDoctor.checksFinished` | action | `( report )`. The checks ran from the screen, before the page reloads |
+| `axleRuntimeDoctor.pageCacheStarted` | action | `( text )`. The page cache test was started from the Page cache tab. The page reloads when it is done. `text` is what the screen tells assistive technology |
 
 ### Examples
 
@@ -176,6 +207,7 @@ On WordPress 6.9 and later, Runtime Doctor registers [abilities](https://develop
 | `axle-runtime-doctor/run-checks` | Read-only. Runs the checks (`checks`, `group` to narrow them) and returns each result. A full run is stored as a snapshot |
 | `axle-runtime-doctor/get-report` | Read-only. The latest stored report |
 | `axle-runtime-doctor/list-slow-queries` | Read-only. Query shapes from the latest run, slowest total first. `limit` |
+| `axle-runtime-doctor/get-page-cache` | Read-only. The last page cache test: whether a cache answered each page, what stops one, and the plugin or theme when the trace found it. `refresh` runs the test now and sends up to 14 requests to this site |
 | `axle-runtime-doctor/get-fix` | Read-only. `check`, `host`: the setting, where, steps and the support ticket |
 | `axle-runtime-doctor/export-report` | Read-only. The latest report as the portable document for comparing, with paths, hostnames and addresses taken out |
 | `axle-runtime-doctor/list-imported-reports` | Read-only. The reports kept from other sites: `id`, `name`, `added`, `source`, `host` |
@@ -192,6 +224,7 @@ wp axle-runtime-doctor check [<check-id>...] [--group=<group>] [--status=<status
 wp axle-runtime-doctor report [--status=<statuses>] [--format=<format>]
 wp axle-runtime-doctor history [--format=<format>]
 wp axle-runtime-doctor slow-queries [--limit=<n>] [--format=<format>]
+wp axle-runtime-doctor page-cache [--stored] [--fields=<fields>] [--format=<format>]
 wp axle-runtime-doctor fix <check-id> [--host=<host>] [--format=text|json]
 wp axle-runtime-doctor autoload <off|on> <option>...
 wp axle-runtime-doctor export [--file=<file>] [--fresh]
@@ -207,6 +240,8 @@ wp axle-runtime-doctor settings [--host=<host>] [--sampling=on|off] [--sample-ra
 
 `check` runs through the web server and exits with 1 when a check is critical. A full run (no IDs, no group) is stored as a snapshot.
 
+`page-cache` runs the test and prints a row per page and the findings. `--stored` shows the last test instead.
+
 `export` prints or writes the portable report of the latest run, and runs the checks first when there is none or with `--fresh`. `compare` takes a file from another site or the id of a kept report, lists what differs, and exits with 1 when something does, so a script can notice.
 
 ## Data
@@ -220,8 +255,9 @@ wp axle-runtime-doctor settings [--host=<host>] [--sampling=on|off] [--sample-ra
 | `axle_runtime_doctor_php_releases` | php.net's release list, 7 days, only when that check is on |
 | `axle_runtime_doctor_notice` | The open regression notice |
 | `axle_runtime_doctor_imports` | Reports kept from other sites: name, date, how they came, and the clean report. Up to 10 |
+| `axle_runtime_doctor_page_cache` | The last page cache test: per page the verdict of the headers, cookie names (never values), what stops a cache and the trace. Per site on multisite |
 | `axle_runtime_doctor_import_trash` | The report removed last, for 15 minutes, so Undo works |
-| user meta `axle_runtime_doctor_flash`, `axle_runtime_doctor_compare_state` | The notice an action leaves for the next page view, and whether the user hid or finished the Get started card |
+| user meta `axle_runtime_doctor_flash`, `axle_runtime_doctor_compare_state`, `axle_runtime_doctor_cache_flash`, `axle_runtime_doctor_cache_state` | The notice an action leaves for the next page view, and whether the user hid or finished the Get started card |
 | `axle_runtime_doctor_probe_*` | Probe tokens and one-time codes (hashed, single use, 60 seconds for probes, 10 minutes for codes) and probe output, removed after use and once a day |
 | `axle_runtime_doctor_daily` | The daily cron event |
 
@@ -229,4 +265,4 @@ All are options with autoload off, network options on multisite. Probe tokens ar
 
 ## Privacy
 
-Nothing about visitors is stored. Samples hold counts and memory use only, and query shapes have every value taken out. The only personal data is an alert recipient's email address; the privacy exporter lists it and the eraser removes it. Exported reports have paths, hostnames, email addresses and IP addresses replaced. Direct mode makes one request to the address in a code an administrator pasted, and nothing else leaves the site.
+Nothing about visitors is stored. The page cache test requests your own pages with no cookies and keeps the names of the cookies they set, never the values. Samples hold counts and memory use only, and query shapes have every value taken out. The only personal data is an alert recipient's email address; the privacy exporter lists it and the eraser removes it. Exported reports have paths, hostnames, email addresses and IP addresses replaced. Direct mode makes one request to the address in a code an administrator pasted, and nothing else leaves the site.

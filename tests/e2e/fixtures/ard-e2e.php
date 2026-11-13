@@ -50,3 +50,29 @@ if ( 'on' === get_option( 'ard_e2e_direct' ) ) {
 		2
 	);
 }
+
+/*
+ * Page cache fixture: the option ard_e2e_cache picks what the front end does.
+ * cookie: sets a cookie, nocache: calls nocache_headers(), session: starts a
+ * PHP session, donotcache: defines DONOTCACHEPAGE, hit: answers like a host
+ * cache (a miss, then hits), anything else does nothing.
+ */
+add_action(
+	'template_redirect',
+	static function () {
+		$mode = (string) get_option( 'ard_e2e_cache' );
+		if ( 'cookie' === $mode ) {
+			setcookie( 'ard_visitor', '1', 0, '/' ); // phpcs:ignore
+		} elseif ( 'nocache' === $mode ) {
+			nocache_headers();
+		} elseif ( 'session' === $mode && ! headers_sent() ) {
+			session_start(); // phpcs:ignore
+		} elseif ( 'donotcache' === $mode ) {
+			define( 'DONOTCACHEPAGE', true );
+		} elseif ( 'hit' === $mode ) {
+			$key = 'ard_e2e_seen_' . md5( (string) ( $_SERVER['REQUEST_URI'] ?? '' ) ); // phpcs:ignore
+			header( 'X-Kinsta-Cache: ' . ( get_transient( $key ) ? 'HIT' : 'MISS' ) );
+			set_transient( $key, 1, 60 );
+		}
+	}
+);

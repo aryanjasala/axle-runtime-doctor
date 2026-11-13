@@ -8,7 +8,7 @@ Stable tag: 1.0.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Checks the server WordPress runs on: OPcache coverage, the object cache, PHP support and limits, cron and more, with the fix for your host.
+Checks the server WordPress runs on: OPcache, object cache, PHP, cron, the page cache and more, with the fix for your host.
 
 == Description ==
 
@@ -27,6 +27,7 @@ Part of [Axle](https://axlewp.com/) by AryanX, a family of free plugins for runn
 * **PHP**: the end of security support for your branch, the patch level (optional), memory_limit against WP_MEMORY_LIMIT and real peak use, max_execution_time, max_input_vars against your biggest menu, post_max_size against upload_max_filesize, display_errors in production, and the realpath cache.
 * **Database**: the 20 biggest autoloaded options with their owner, autoloaded transients, options of inactive plugins, slow queries on your key pages, MyISAM tables, the largest tables, tables without a primary key, and the end of life of your MySQL or MariaDB release.
 * **Cron and loopback**: whether a real cron runs events when WP-Cron is off, duplicate events, events nothing handles, loopback speed and whether it goes out through a CDN or firewall.
+* **Page cache**: whether a cache answers a visitor, and what stops it (see below).
 * **Files**: wp-config.php readable by everyone, PHP files in uploads, PHP running as a different user from the file owner, wp-content not writable, and free disk space.
 
 = Real values, not WP-CLI's =
@@ -43,6 +44,21 @@ The plugin guesses your host from constants, environment variables, paths and th
 
 The comparison covers every check and the PHP, OPcache and WordPress settings. Differences come first, each with a sentence on what it means. For example: "OPcache holds 2,000 files on Staging and 10,000 on Production: Staging runs out of slots first and recompiles PHP it could have kept." Imported reports are kept, named and dated, so "before the host migration" can be compared with "after". An import is read as data only: it is checked field by field and never run.
 
+= What keeps the page cache from working =
+
+The host's cache is on and almost nothing is served from it. Nobody knows why. The Page cache tab asks your home page, latest post and a page twice, as a visitor who is not logged in, and reads the headers. It tells you whether a cache answered (it knows the headers of Cloudflare, Kinsta, SiteGround, LiteSpeed, Varnish, WP Engine, Fastly, CloudFront and more) and what stops one:
+
+* a cookie on a page for logged-out visitors (it keeps the cookie's name, never its value),
+* a PHP session, from its cookie or the headers `session_start()` sends,
+* `Cache-Control: no-store`, `private` or `no-cache`,
+* `Vary: Cookie` or `Vary: *`,
+* a call to `nocache_headers()`,
+* the `DONOTCACHEPAGE` constant, which cache plugins read and which sends no header.
+
+A page that no cache answered is loaded once more and watches itself, to find who did it. A call to `nocache_headers()` is seen directly, so the plugin or theme is named for sure. PHP has no way to see who sets a cookie, so for that the page shows which hook it happened in and which plugins have code on that hook. It says "one of these" when it cannot tell, and it says so when it cannot trace at all. It does not guess a name.
+
+You get the fix for your host and a support ticket with what the pages send. The result is part of the daily history and Site Health.
+
 = History and alerts =
 
 The checks run once a day and keep the last 30 snapshots. When a check gets worse, for example OPcache stops caching wp-content after the host moved the site, you get an email and a notice in wp-admin.
@@ -52,7 +68,7 @@ The checks run once a day and keep the last 30 snapshots. When a check gets wors
 * Site Health shows the checks that matter most, and its Info tab lists every value.
 * "Turn autoload off" on any listed option, from the screen, WP-CLI or an ability, with an Undo link. Options WordPress itself needs are never switched off. An action fires with the values before and after, so an activity log can undo it too.
 * On multisite the full screen is in Network Admin, and each site sees the checks about itself.
-* Abilities for AI agents on WordPress 6.9 and later: run-checks, get-report, list-slow-queries, get-fix, export-report, list-imported-reports, compare-reports, disable-autoload and enable-autoload.
+* Abilities for AI agents on WordPress 6.9 and later: run-checks, get-report, list-slow-queries, get-page-cache, get-fix, export-report, list-imported-reports, compare-reports, disable-autoload and enable-autoload.
 
 = WP-CLI =
 
@@ -61,6 +77,7 @@ The checks run once a day and keep the last 30 snapshots. When a check gets wors
 `wp axle-runtime-doctor report`
 `wp axle-runtime-doctor history`
 `wp axle-runtime-doctor slow-queries`
+`wp axle-runtime-doctor page-cache [--stored]`
 `wp axle-runtime-doctor autoload <off|on> <option>...`
 `wp axle-runtime-doctor export --file=production.json`
 `wp axle-runtime-doctor compare production.json`
@@ -80,7 +97,7 @@ The PHP patch-level check can compare your PHP version with the release list on 
 
 Direct mode, for comparing two sites, makes one request when an administrator pastes a one-time code under Compare and chooses "Fetch the report". The request goes to the site address inside the code, over https, and carries only the code's token. The other site answers with its runtime report, which has paths, hostnames, email addresses and IP addresses replaced. Nothing is sent without that action, and you can turn direct mode off with the axle_runtime_doctor_direct_enabled filter.
 
-No other external requests are made. The loopback requests go to your own site.
+No other external requests are made. The loopback requests and the page cache test go to your own site.
 
 == Frequently Asked Questions ==
 
@@ -100,13 +117,21 @@ The loopback request goes to your home URL from the server. If the server cannot
 
 It holds each check's verdict and a list of PHP, OPcache and WordPress settings. Paths, hostnames, email addresses and IP addresses are replaced, and check details and raw data are left out. Read the file before you send it: you know your own site best. The axle_runtime_doctor_export_replacements filter replaces other text, such as a private hostname.
 
+= How does the page cache test know which plugin sets a cookie? =
+
+Often it does not, and it says so. A call to nocache_headers() from a plugin or theme is seen for sure. A cookie, a session or DONOTCACHEPAGE is only placed in the WordPress hook where it appeared. If one plugin has code on that hook, the result says "probably" that plugin. If several do, it lists them as "one of these". A cookie name that matches a known plugin, such as WooCommerce, adds a note that the name points at it.
+
+= Does the page cache test change my cache? =
+
+No. It cannot purge or change a cache. It sends ordinary requests to your own pages with no cookies, which may fill a cache the way any visitor's would, and one more request with a new query string to trace a page. Up to 14 requests per run.
+
 = Can it flush or warm OPcache? =
 
 No. Flush Opcache and OPcache Manager do that well.
 
 = What does it store? =
 
-Its settings, the last 30 snapshots (status and value per check), the latest full report, up to 10 reports you import from other sites, and up to 500 samples. Query digests have every value taken out, so no emails or other data end up in them. Uninstalling removes all of it.
+Its settings, the last 30 snapshots (status and value per check), the latest full report, the last page cache test (cookie names, never values), up to 10 reports you import from other sites, and up to 500 samples. Query digests have every value taken out, so no emails or other data end up in them. Uninstalling removes all of it.
 
 == Screenshots ==
 
@@ -114,6 +139,7 @@ Its settings, the last 30 snapshots (status and value per check), the latest ful
 2. How to fix it on Pressable, with the support ticket filled in.
 3. History: the day OPcache stopped caching wp-content.
 4. Slow queries on the key pages, grouped by shape, with the component that sent them.
+5. The page cache test: the cookie that makes every page skip the cache, and the plugin behind it.
 
 == Changelog ==
 

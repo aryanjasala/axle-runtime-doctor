@@ -65,7 +65,7 @@ final class Sampler implements Service {
 	 */
 	public function maybe_sample(): void {
 		$rate = $this->settings->sample_rate();
-		if ( $rate < 1 || is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) || ( defined( 'WP_CLI' ) && WP_CLI ) || Probe::capturing() ) {
+		if ( $rate < 1 || is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) || ( defined( 'WP_CLI' ) && WP_CLI ) || Probe::capturing() || PageCache\Tracer::active() ) {
 			return;
 		}
 		if ( 1 !== $rate && 1 !== wp_rand( 1, $rate ) ) {

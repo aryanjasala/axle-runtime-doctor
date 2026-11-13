@@ -25,7 +25,7 @@ use const AryanX\Axle\RuntimeDoctor\VERSION;
 defined( 'ABSPATH' ) || exit;
 
 /**
- * The screen: Checks, History, Compare, Slow queries and Settings tabs.
+ * The screen: Checks, Page cache, History, Compare, Slow queries and Settings tabs.
  *
  * On multisite the runtime is shared, so the full screen lives in Network
  * Admin (Settings > Runtime Doctor), and each site's Tools > Runtime Doctor
@@ -100,28 +100,37 @@ final class Page implements Service {
 	private ComparePanel $compare;
 
 	/**
+	 * The Page cache tab.
+	 *
+	 * @var PageCachePanel
+	 */
+	private PageCachePanel $page_cache;
+
+	/**
 	 * Sets up the screen.
 	 *
-	 * @param Settings     $settings Settings.
-	 * @param Runner       $runner   Runs the checks.
-	 * @param History      $history  Snapshots.
-	 * @param Fixes        $fixes    Fix data.
-	 * @param Hosts        $hosts    Host detection.
-	 * @param Autoload     $autoload Autoloaded options.
-	 * @param Alerts       $alerts   Alerts.
-	 * @param Registry     $registry The checks.
-	 * @param ComparePanel $compare  The Compare tab.
+	 * @param Settings       $settings Settings.
+	 * @param Runner         $runner   Runs the checks.
+	 * @param History        $history  Snapshots.
+	 * @param Fixes          $fixes    Fix data.
+	 * @param Hosts          $hosts    Host detection.
+	 * @param Autoload       $autoload Autoloaded options.
+	 * @param Alerts         $alerts   Alerts.
+	 * @param Registry       $registry The checks.
+	 * @param ComparePanel   $compare  The Compare tab.
+	 * @param PageCachePanel $page_cache The Page cache tab.
 	 */
-	public function __construct( Settings $settings, Runner $runner, History $history, Fixes $fixes, Hosts $hosts, Autoload $autoload, Alerts $alerts, Registry $registry, ComparePanel $compare ) {
-		$this->settings = $settings;
-		$this->runner   = $runner;
-		$this->history  = $history;
-		$this->fixes    = $fixes;
-		$this->hosts    = $hosts;
-		$this->autoload = $autoload;
-		$this->alerts   = $alerts;
-		$this->registry = $registry;
-		$this->compare  = $compare;
+	public function __construct( Settings $settings, Runner $runner, History $history, Fixes $fixes, Hosts $hosts, Autoload $autoload, Alerts $alerts, Registry $registry, ComparePanel $compare, PageCachePanel $page_cache ) {
+		$this->settings   = $settings;
+		$this->runner     = $runner;
+		$this->history    = $history;
+		$this->fixes      = $fixes;
+		$this->hosts      = $hosts;
+		$this->autoload   = $autoload;
+		$this->alerts     = $alerts;
+		$this->registry   = $registry;
+		$this->compare    = $compare;
+		$this->page_cache = $page_cache;
 	}
 
 	/**
@@ -242,6 +251,23 @@ final class Page implements Service {
 					'content' => '<p>' . esc_html__( 'A snapshot is stored after each full run, and the checks run once a day on their own. The last 30 are kept.', 'axle-runtime-doctor' ) . '</p><p>' . esc_html__( 'A check that got worse than in the snapshot before is a regression. It is marked here, shown in an admin notice and emailed to the alert recipients.', 'axle-runtime-doctor' ) . '</p>',
 				);
 				break;
+			case 'page-cache':
+				$tabs[] = array(
+					'id'      => 'cache-test',
+					'title'   => __( 'Run the test', 'axle-runtime-doctor' ),
+					'content' => '<p>' . esc_html__( 'The test asks your home page, latest post and a page twice, as a visitor who is not logged in. It sends no cookies. The second answer shows whether a cache holds the page.', 'axle-runtime-doctor' ) . '</p><p>' . esc_html__( 'It tries the public address first, so a CDN in front of the site is part of the test. If the server cannot reach that address, it uses its own address and says so.', 'axle-runtime-doctor' ) . '</p>',
+				);
+				$tabs[] = array(
+					'id'      => 'cache-blame',
+					'title'   => __( 'Who is to blame', 'axle-runtime-doctor' ),
+					'content' => '<p>' . esc_html__( 'When something on a page would stop a cache, the page is loaded once more and watches itself. A call to nocache_headers() is seen directly, so the plugin or theme is named for sure.', 'axle-runtime-doctor' ) . '</p><p>' . esc_html__( 'PHP gives no way to see who sets a cookie or defines DONOTCACHEPAGE. For those, the test shows which hook it happened in and which plugins have code on that hook. It says "one of these" when it cannot tell, and it never guesses a name.', 'axle-runtime-doctor' ) . '</p>',
+				);
+				$tabs[] = array(
+					'id'      => 'cache-fix',
+					'title'   => __( 'Fix it', 'axle-runtime-doctor' ),
+					'content' => '<p>' . esc_html__( 'Remove the cookie or header at its source, or load that feature on the pages that need it only. Your host\'s cache settings and a support ticket to paste are under the findings.', 'axle-runtime-doctor' ) . '</p>',
+				);
+				break;
 			case 'compare':
 				$tabs[] = array(
 					'id'      => 'compare-export',
@@ -324,7 +350,7 @@ final class Page implements Service {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only tab switch.
 		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'checks';
 
-		return in_array( $tab, array( 'checks', 'history', 'compare', 'slow-queries', 'settings' ), true ) ? $tab : 'checks';
+		return in_array( $tab, array( 'checks', 'page-cache', 'history', 'compare', 'slow-queries', 'settings' ), true ) ? $tab : 'checks';
 	}
 
 	/**
@@ -338,6 +364,7 @@ final class Page implements Service {
 		$tab  = self::full() ? self::tab() : 'checks';
 		$tabs = array(
 			'checks'       => __( 'Checks', 'axle-runtime-doctor' ),
+			'page-cache'   => __( 'Page cache', 'axle-runtime-doctor' ),
 			'history'      => __( 'History', 'axle-runtime-doctor' ),
 			'compare'      => __( 'Compare', 'axle-runtime-doctor' ),
 			'slow-queries' => __( 'Slow queries', 'axle-runtime-doctor' ),
@@ -385,6 +412,9 @@ final class Page implements Service {
 		switch ( $tab ) {
 			case 'history':
 				$this->render_history();
+				break;
+			case 'page-cache':
+				$this->page_cache->render();
 				break;
 			case 'compare':
 				$this->compare->render();
@@ -612,6 +642,9 @@ final class Page implements Service {
 		if ( 'db_autoload' === $id ) {
 			$this->autoload_table( $result );
 		}
+		if ( 'page_cache' === $id ) {
+			echo '<p><a href="' . esc_url( self::url( 'page-cache' ) ) . '">' . esc_html__( 'See each page and what stops its cache', 'axle-runtime-doctor' ) . '</a></p>';
+		}
 
 		if ( in_array( $status, array( Result::CRITICAL, Result::RECOMMENDED ), true ) ) {
 			$this->fix( $result, $host );
@@ -626,34 +659,7 @@ final class Page implements Service {
 	 * @param array $host   The host.
 	 */
 	private function fix( array $result, array $host ): void {
-		$fix = $this->fixes->get( (string) $result['id'], $host );
-		if ( ! $fix ) {
-			return;
-		}
-		$ticket = $this->fixes->ticket( $result, $host );
-		$id     = 'ard-ticket-' . (string) $result['id'];
-
-		echo '<details class="ard-fix"><summary>';
-		/* translators: %s: host name. */
-		echo esc_html( sprintf( __( 'How to fix on %s', 'axle-runtime-doctor' ), (string) ( $host['label'] ?? '' ) ) );
-		echo '</summary>';
-		echo '<dl class="axle-facts ard-values">';
-		echo '<dt>' . esc_html__( 'Setting', 'axle-runtime-doctor' ) . '</dt><dd>' . esc_html( $fix['setting'] ) . '</dd>';
-		echo '<dt>' . esc_html__( 'Where', 'axle-runtime-doctor' ) . '</dt><dd>' . esc_html( $fix['where'] ) . '</dd>';
-		echo '</dl>';
-		if ( $fix['steps'] ) {
-			echo '<ol class="ard-steps">';
-			foreach ( $fix['steps'] as $step ) {
-				echo '<li>' . esc_html( str_replace( '{site}', home_url( '/' ), $step ) ) . '</li>';
-			}
-			echo '</ol>';
-		}
-		if ( '' !== $ticket ) {
-			echo '<label for="' . esc_attr( $id ) . '" class="ard-ticket-label">' . esc_html__( 'Support ticket', 'axle-runtime-doctor' ) . '</label>';
-			echo '<textarea id="' . esc_attr( $id ) . '" class="ard-ticket large-text" rows="9" readonly>' . esc_textarea( $ticket ) . '</textarea>';
-			echo '<p><button type="button" class="button ard-copy" data-ard-copy="' . esc_attr( $id ) . '" data-check="' . esc_attr( (string) $result['id'] ) . '" data-host="' . esc_attr( (string) ( $host['id'] ?? '' ) ) . '">' . esc_html__( 'Copy support ticket', 'axle-runtime-doctor' ) . '</button></p>';
-		}
-		echo '</details>';
+		FixCard::render( $this->fixes, $result, $host );
 	}
 
 	/**

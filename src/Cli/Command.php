@@ -14,12 +14,14 @@ use AryanX\Axle\RuntimeDoctor\Compare\Direct;
 use AryanX\Axle\RuntimeDoctor\Compare\Exporter;
 use AryanX\Axle\RuntimeDoctor\Compare\Importer;
 use AryanX\Axle\RuntimeDoctor\Compare\Library;
+use AryanX\Axle\RuntimeDoctor\PageCache\Scanner;
 use AryanX\Axle\RuntimeDoctor\Fixes;
 use AryanX\Axle\RuntimeDoctor\History;
 use AryanX\Axle\RuntimeDoctor\Hosts;
 use AryanX\Axle\RuntimeDoctor\Result;
 use AryanX\Axle\RuntimeDoctor\Runner;
 use AryanX\Axle\RuntimeDoctor\Settings;
+use AryanX\Axle\RuntimeDoctor\Checks\PageCache;
 use AryanX\Axle\RuntimeDoctor\Checks\Registry;
 use WP_CLI;
 use WP_CLI\Utils;
@@ -40,6 +42,7 @@ defined( 'ABSPATH' ) || exit;
  *     wp axle-runtime-doctor check --group=opcache --status=critical,recommended
  *     wp axle-runtime-doctor fix opcache_coverage --host=pressable
  *     wp axle-runtime-doctor autoload off my_big_option
+ *     wp axle-runtime-doctor page-cache
  *     wp axle-runtime-doctor export --file=production.json
  *     wp axle-runtime-doctor compare production.json
  */
@@ -301,6 +304,63 @@ final class Command {
 			);
 		}
 		Utils\format_items( (string) ( $assoc_args['format'] ?? 'table' ), $rows, array( 'total_ms', 'calls', 'max_ms', 'component', 'sql' ) );
+	}
+
+	/**
+	 * Tests whether a page cache answers visitors, and what stops it.
+	 *
+	 * Asks the home page, the latest post and a page twice, with no cookies, and
+	 * reads the response headers. Pages that send a cookie, no-store, Vary: Cookie
+	 * or a PHP session are loaded once more, and the page traces who did it. A
+	 * plugin is named only when the trace saw it or only one plugin could have.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--stored]
+	 * : Show the last test instead of running a new one.
+	 *
+	 * [--fields=<fields>]
+	 * : Fields to show. Default: url,status,answered,by,first_ms,second_ms,stops.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 * ---
+	 * default: table
+	 * options:
+	 *   - table
+	 *   - csv
+	 *   - json
+	 *   - yaml
+	 *   - count
+	 * ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp axle-runtime-doctor page-cache
+	 *     wp axle-runtime-doctor page-cache --stored --format=json
+	 *
+	 * @subcommand page-cache
+	 * @param array $args       Unused.
+	 * @param array $assoc_args Options.
+	 */
+	public function page_cache( $args, $assoc_args ): void {
+		unset( $args );
+		$scan = Utils\get_flag_value( $assoc_args, 'stored', false ) ? Scanner::latest() : Scanner::scan();
+		if ( ! $scan ) {
+			WP_CLI::error( Utils\get_flag_value( $assoc_args, 'stored', false ) ? 'The page cache has not been tested yet. Run: wp axle-runtime-doctor page-cache' : 'The page cache test is switched off (filter axle_runtime_doctor_page_cache_enabled).' );
+		}
+
+		$format = (string) ( $assoc_args['format'] ?? 'table' );
+		if ( 'table' === $format ) {
+			$result = PageCache::from_scan( $scan );
+			if ( $result ) {
+				WP_CLI::log( sprintf( '%s: %s (%s)', strtoupper( $result->status ), $result->summary, $result->value ) );
+				foreach ( $result->details as $line ) {
+					WP_CLI::log( '  - ' . $line );
+				}
+			}
+		}
+		Utils\format_items( $format, Scanner::rows( $scan ), self::fields( $assoc_args, 'url,status,answered,by,first_ms,second_ms,stops' ) );
 	}
 
 	/**

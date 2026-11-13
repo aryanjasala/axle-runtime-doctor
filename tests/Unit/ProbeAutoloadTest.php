@@ -53,6 +53,19 @@ final class ProbeAutoloadTest extends DoctorTestCase {
 		$this->assertArrayNotHasKey( Probe::PREFIX . Probe::hash( 'old' ), $this->options );
 	}
 
+	public function test_a_row_whose_stored_hash_is_not_the_tokens_is_refused_and_kept(): void {
+		$name                   = Probe::PREFIX . Probe::hash( 'real' );
+		$this->options[ $name ] = array(
+			'mode'    => 'run',
+			'args'    => array(),
+			'hash'    => Probe::hash( 'someone-else' ),
+			'expires' => time() + 60,
+		);
+
+		$this->assertNull( Probe::consume( 'real' ) );
+		$this->assertArrayHasKey( $name, $this->options );
+	}
+
 	public function test_loopback_url_filter_rewrites_site_urls(): void {
 		$this->assertSame( 'https://example.com', Probe::base_url() );
 

@@ -7,7 +7,9 @@
 
 namespace AryanX\Axle\RuntimeDoctor;
 
+use AryanX\Axle\RuntimeDoctor\Checks\PageCache;
 use AryanX\Axle\RuntimeDoctor\Checks\Registry;
+use AryanX\Axle\RuntimeDoctor\PageCache\Scanner;
 use AryanX\Axle\RuntimeDoctor\Compare\Comparer;
 use AryanX\Axle\RuntimeDoctor\Compare\Exporter;
 use AryanX\Axle\RuntimeDoctor\Compare\Importer;
@@ -223,6 +225,57 @@ final class Abilities implements Service {
 				),
 			),
 			array( $this, 'list_slow_queries' ),
+			$readonly
+		);
+
+		$this->ability(
+			'get-page-cache',
+			__( 'Find what keeps the page cache from working', 'axle-runtime-doctor' ),
+			__( 'Asks the home page, the latest post and a page twice as a visitor and reports whether a cache answered, and what stops one: cookies, no-store, Vary: Cookie, a PHP session or a nocache call. Names a plugin or theme only when the trace could. Without refresh it returns the last test.', 'axle-runtime-doctor' ),
+			array(
+				'type'                 => 'object',
+				'properties'           => array(
+					'refresh' => array(
+						'type'        => 'boolean',
+						'default'     => false,
+						'description' => __( 'Run the test now. It sends up to nine requests to this site.', 'axle-runtime-doctor' ),
+					),
+				),
+				'additionalProperties' => false,
+				'default'              => array(),
+			),
+			array(
+				'type'       => 'object',
+				'properties' => array(
+					'tested' => array( 'type' => 'boolean' ),
+					'time'   => array( 'type' => 'integer' ),
+					'status' => array( 'type' => 'string' ),
+					'result' => array( 'type' => 'string' ),
+					'value'  => array( 'type' => 'string' ),
+					'found'  => array(
+						'type'  => 'array',
+						'items' => array( 'type' => 'string' ),
+					),
+					'pages'  => array(
+						'type'  => 'array',
+						'items' => array(
+							'type'       => 'object',
+							'properties' => array(
+								'url'       => array( 'type' => 'string' ),
+								'status'    => array( 'type' => 'integer' ),
+								'answered'  => array( 'type' => 'string' ),
+								'by'        => array( 'type' => 'string' ),
+								'first_ms'  => array( 'type' => 'integer' ),
+								'second_ms' => array( 'type' => 'integer' ),
+								'stops'     => array( 'type' => 'string' ),
+								'via'       => array( 'type' => 'string' ),
+								'error'     => array( 'type' => 'string' ),
+							),
+						),
+					),
+				),
+			),
+			array( $this, 'get_page_cache' ),
 			$readonly
 		);
 
@@ -491,6 +544,40 @@ final class Abilities implements Service {
 			'threshold_ms' => (float) ( $slow['threshold_ms'] ?? Settings::slow_query_ms() ),
 			'pages'        => array_map( 'strval', (array) ( $slow['probed'] ?? array() ) ),
 			'queries'      => $rows,
+		);
+	}
+
+	/**
+	 * The page cache test: the last one, or a new one.
+	 *
+	 * @param array|null $input refresh.
+	 * @return array
+	 */
+	public function get_page_cache( $input = null ): array {
+		$input = (array) $input;
+		$scan  = ! empty( $input['refresh'] ) ? Scanner::scan() : Scanner::latest();
+		if ( ! $scan ) {
+			return array(
+				'tested' => false,
+				'time'   => 0,
+				'status' => Result::INFO,
+				'result' => __( 'The page cache has not been tested yet.', 'axle-runtime-doctor' ),
+				'value'  => '',
+				'found'  => array(),
+				'pages'  => array(),
+			);
+		}
+
+		$result = PageCache::from_scan( $scan );
+
+		return array(
+			'tested' => true,
+			'time'   => (int) $scan['time'],
+			'status' => $result ? $result->status : Result::INFO,
+			'result' => $result ? $result->summary : '',
+			'value'  => $result ? $result->value : '',
+			'found'  => $result ? $result->details : array(),
+			'pages'  => Scanner::rows( $scan ),
 		);
 	}
 

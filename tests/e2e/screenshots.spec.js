@@ -58,4 +58,13 @@ test.describe.serial( 'Screenshots', () => {
 		await expect( page.locator( '.ard-slow tbody tr' ).first() ).toBeVisible();
 		await shot( page, 4 );
 	} );
+
+	test( '5: the page cache test, with the cookie that makes every page skip the cache', async ( { page } ) => {
+		h.seedPageCache( 'blocked' );
+		await page.goto( `${ PAGE }&tab=page-cache` );
+		await expect( page.locator( '.ard-cache-pages' ) ).toBeVisible();
+		await page.evaluate( () => document.querySelector( '#ard-cache-run' ).scrollIntoView( { block: 'start' } ) );
+		await page.evaluate( () => window.scrollBy( 0, -60 ) );
+		await shot( page, 5 );
+	} );
 } );

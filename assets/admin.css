@@ -157,3 +157,27 @@ tr.ard-regressed td {
 .ard-saved .axle-confirm {
 	margin-top: 8px;
 }
+
+.ard-cache-form {
+	align-items: center;
+}
+
+.ard-cache-form .spinner {
+	float: none;
+	margin: 0 6px;
+}
+
+.ard-cache-pages td,
+.ard-cache-pages th {
+	vertical-align: top;
+}
+
+.ard-cache-pages td ul {
+	margin: 0;
+	padding-left: 18px;
+}
+
+.ard-cache-details {
+	list-style: disc;
+	padding-left: 20px;
+}
