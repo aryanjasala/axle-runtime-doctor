@@ -268,3 +268,8 @@ tr.ard-regressed td {
 		padding-left: 0;
 	}
 }
+
+/* Screen-reader text is absolutely positioned: without a positioned parent it sits outside the scrolling box and widens the page on older WordPress. */
+.ard-wrap .axle-scroll {
+	position: relative;
+}
