@@ -71,7 +71,7 @@ final class ComparePanel implements Service {
 	 * @return string
 	 */
 	private static function url( array $args = array() ): string {
-		return Page::url( 'compare', $args );
+		return Page::url( 'compare', array_merge( array( 'view' => 'site' ), $args ) );
 	}
 
 	/**
@@ -465,7 +465,7 @@ final class ComparePanel implements Service {
 		}
 
 		echo '<form method="get" action="' . esc_url( is_multisite() ? network_admin_url( 'settings.php' ) : admin_url( 'tools.php' ) ) . '" class="axle-toolbar ard-pick">';
-		echo '<input type="hidden" name="page" value="' . esc_attr( Page::SLUG ) . '"><input type="hidden" name="tab" value="compare">';
+		echo '<input type="hidden" name="page" value="' . esc_attr( Page::SLUG ) . '"><input type="hidden" name="tab" value="compare"><input type="hidden" name="view" value="site">';
 		foreach ( array(
 			'a' => array( __( 'First report', 'axle-runtime-doctor' ), $first ),
 			'b' => array( __( 'Second report', 'axle-runtime-doctor' ), $other ),

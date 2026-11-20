@@ -7,6 +7,7 @@
 
 namespace AryanX\Axle\RuntimeDoctor;
 
+use AryanX\Axle\RuntimeDoctor\Admin\AxleUi;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -52,6 +53,13 @@ final class Probe implements Service {
 	 * @var bool
 	 */
 	private static bool $capturing = false;
+
+	/**
+	 * Whether this request is a front-end timing probe.
+	 *
+	 * @var bool
+	 */
+	private static bool $timed = false;
 
 	/**
 	 * Adds the REST route.
@@ -241,9 +249,10 @@ final class Probe implements Service {
 	 *
 	 * @param string $token   Probe token.
 	 * @param int    $timeout Seconds.
+	 * @param string $url     Where it goes, so Staging Guard's gate lets it through.
 	 * @return array
 	 */
-	private static function request_args( string $token, int $timeout ): array {
+	private static function request_args( string $token, int $timeout, string $url = '' ): array {
 		return array(
 			'timeout'     => $timeout,
 			'redirection' => 0,
@@ -253,7 +262,7 @@ final class Probe implements Service {
 				self::HEADER    => $token,
 				'Cache-Control' => 'no-cache',
 				'Content-Type'  => 'application/json',
-			),
+			) + ( '' !== $url ? AxleUi::loopback_headers( $url ) : array() ),
 		);
 	}
 
@@ -267,8 +276,9 @@ final class Probe implements Service {
 	 */
 	public static function call( string $mode, array $args = array(), int $timeout = 20 ) {
 		$token    = self::issue( $mode, $args );
-		$url      = self::loopback( add_query_arg( 'rest_route', '/' . self::NS . '/probe', home_url( '/' ) ) );
-		$response = wp_remote_post( $url, self::request_args( $token, $timeout ) + array( 'body' => '{}' ) );
+		$public   = add_query_arg( 'rest_route', '/' . self::NS . '/probe', home_url( '/' ) );
+		$url      = self::loopback( $public );
+		$response = wp_remote_post( $url, self::request_args( $token, $timeout, $public ) + array( 'body' => '{}' ) );
 
 		if ( is_wp_error( $response ) ) {
 			delete_option( self::PREFIX . self::hash( $token ) );
@@ -305,7 +315,7 @@ final class Probe implements Service {
 		$token = self::issue( 'queries' );
 		$out   = self::OUT . self::hash( $token );
 		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.wp_remote_get_wp_remote_get -- A loopback to this site, which must wait for the whole page.
-		$response = wp_remote_get( self::loopback( $url ), self::request_args( $token, 20 ) );
+		$response = wp_remote_get( self::loopback( $url ), self::request_args( $token, 20, $url ) );
 		$found    = get_option( $out );
 		delete_option( $out );
 		delete_option( self::PREFIX . self::hash( $token ) );
@@ -327,11 +337,17 @@ final class Probe implements Service {
 	 */
 	public static function maybe_capture(): void {
 		$token = isset( $_SERVER['HTTP_X_AXLE_RUNTIME_DOCTOR_PROBE'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTP_X_AXLE_RUNTIME_DOCTOR_PROBE'] ) ) : '';
-		if ( '' === $token || ! self::consume( $token, 'queries' ) ) {
+		$grant = '' !== $token ? self::consume( $token, array( 'queries', 'timed' ) ) : null;
+		if ( ! $grant ) {
 			return;
 		}
 
 		self::$capturing = true;
+		if ( 'timed' === $grant['mode'] ) {
+			self::start_timing( $token );
+
+			return;
+		}
 		if ( ! defined( 'SAVEQUERIES' ) ) {
 			define( 'SAVEQUERIES', true ); // phpcs:ignore WordPress.WP.DiscouragedConstants.SAVEQUERIESDeclarationFound, WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- Only for this single, token-authenticated probe request.
 		}
@@ -345,6 +361,98 @@ final class Probe implements Service {
 				self::save_queries( $out );
 			},
 			0
+		);
+	}
+
+	/**
+	 * Marks this request as a timing probe: no page cache, no canonical
+	 * redirect, and the server time saved for the caller at shutdown.
+	 *
+	 * @param string $token The token this request carried (already used up).
+	 */
+	private static function start_timing( string $token ): void {
+		self::$timed = true;
+		if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+			define( 'DONOTCACHEPAGE', true ); // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound -- The constant page cache plugins read. Only on this single, token-authenticated probe request.
+		}
+		remove_action( 'template_redirect', 'redirect_canonical' );
+		add_action( 'send_headers', 'nocache_headers' );
+		$out = self::OUT . self::hash( $token );
+		add_action(
+			'shutdown',
+			static function () use ( $out ) {
+				$start = isset( $_SERVER['REQUEST_TIME_FLOAT'] ) ? (float) $_SERVER['REQUEST_TIME_FLOAT'] : self::$booted;
+				add_option(
+					$out,
+					array(
+						'ms'      => round( max( 0, microtime( true ) - $start ) * 1000, 1 ),
+						'status'  => (int) http_response_code(),
+						'skipped' => defined( 'AXLE_RUNTIME_DOCTOR_PROBE_SKIPPED' ) ? (string) constant( 'AXLE_RUNTIME_DOCTOR_PROBE_SKIPPED' ) : '',
+					),
+					'',
+					false
+				);
+			},
+			0
+		);
+	}
+
+	/**
+	 * Whether this request is a timing probe.
+	 *
+	 * @return bool
+	 */
+	public static function timed(): bool {
+		return self::$timed;
+	}
+
+	/**
+	 * Loads one front-end page as a timing probe and returns how long the
+	 * server took. The page is loaded as a visitor would: no cookies, with
+	 * every page cache told to step aside.
+	 *
+	 * @param string $url     Page URL.
+	 * @param string $without A plugin file (folder/file.php) to leave out of this one request. Needs the opt-in loader.
+	 * @return array|WP_Error ms (server time), wall_ms, status, skipped (the plugin left out), cached.
+	 */
+	public static function time_page( string $url, string $without = '' ) {
+		$token = self::issue( 'timed' );
+		if ( '' !== $without ) {
+			Timing\Loader::allow( $token, $without );
+		}
+		$out    = self::OUT . self::hash( $token );
+		$target = add_query_arg( 'axle_rd_nc', wp_generate_password( 8, false, false ), $url );
+		$args   = self::request_args( $token, 30, $url );
+
+		$args['headers']['Pragma'] = 'no-cache';
+		unset( $args['headers']['Content-Type'] );
+
+		$start = microtime( true );
+		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.wp_remote_get_wp_remote_get -- A loopback to this site, which must wait for the whole page.
+		$response = wp_remote_get( self::loopback( $target ), $args );
+		$wall     = ( microtime( true ) - $start ) * 1000;
+		$found    = get_option( $out );
+		delete_option( $out );
+		delete_option( self::PREFIX . self::hash( $token ) );
+		Timing\Loader::forget( $token );
+
+		if ( is_wp_error( $response ) ) {
+			return $response;
+		}
+		if ( ! is_array( $found ) ) {
+			/* translators: %d: HTTP status. */
+			return new WP_Error( 'axle_runtime_doctor_no_timing', sprintf( __( 'HTTP %d, no timing recorded', 'axle-runtime-doctor' ), (int) wp_remote_retrieve_response_code( $response ) ) );
+		}
+
+		$raw     = wp_remote_retrieve_headers( $response );
+		$headers = PageCache\Analyzer::normalise( is_array( $raw ) ? $raw : $raw->getAll() );
+
+		return array(
+			'ms'      => (float) $found['ms'],
+			'wall_ms' => round( $wall, 1 ),
+			'status'  => (int) $found['status'],
+			'skipped' => (string) $found['skipped'],
+			'cached'  => PageCache\Analyzer::HIT === PageCache\Analyzer::answer( $headers )['state'],
 		);
 	}
 

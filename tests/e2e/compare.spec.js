@@ -2,7 +2,7 @@ const { test, expect, wp, wpEval, logInAs } = require( './utils' );
 const h = require( './helpers' );
 
 const PAGE = '/wp-admin/tools.php?page=axle-runtime-doctor';
-const COMPARE = `${ PAGE }&tab=compare`;
+const COMPARE = `${ PAGE }&tab=compare&view=site`;
 const IMPORTS = 'axle_runtime_doctor_imports';
 
 /**

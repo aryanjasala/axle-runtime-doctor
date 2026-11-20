@@ -236,6 +236,29 @@ final class ProbeAutoloadTest extends DoctorTestCase {
 		$this->assertSame( 'unknown', $autoload->owner( 'mystery_option' )['status'] );
 	}
 
+	public function test_owner_of_options_from_leftovers(): void {
+		require_once dirname( __DIR__ ) . '/Stubs/leftovers.php';
+		Functions\when( 'get_plugins' )->justReturn( array() );
+		Functions\when( 'is_plugin_active' )->justReturn( false );
+		Functions\when( 'is_multisite' )->justReturn( false );
+		$GLOBALS['ard_leftovers'] = static function ( $type, $name ) {
+			if ( 'option' === $type && 'gone_plugin_cache' === $name ) {
+				return array( 'owner' => 'gone-plugin', 'owner_name' => 'Gone Plugin', 'confidence' => 'high', 'evidence' => array(), 'in_use' => false, 'in_use_by' => '' );
+			}
+			if ( 'option' === $type && 'live_plugin_cache' === $name ) {
+				return array( 'owner' => 'live-plugin', 'owner_name' => 'Live Plugin', 'confidence' => 'high', 'evidence' => array(), 'in_use' => true, 'in_use_by' => 'live-plugin' );
+			}
+
+			return null;
+		};
+		$autoload = new Autoload();
+
+		$this->assertSame( array( 'label' => 'Gone Plugin', 'status' => 'inactive' ), $autoload->owner( 'gone_plugin_cache' ) );
+		$this->assertSame( array( 'label' => 'Live Plugin', 'status' => 'active' ), $autoload->owner( 'live_plugin_cache' ) );
+		$this->assertSame( 'unknown', $autoload->owner( 'mystery_option' )['status'] );
+		unset( $GLOBALS['ard_leftovers'] );
+	}
+
 	public function test_option_owner_filter(): void {
 		Filters\expectApplied( 'axle_runtime_doctor_option_owner' )->once()->with( array( 'label' => 'WordPress', 'status' => 'core' ), 'siteurl' )->andReturn( array( 'label' => 'Platform', 'status' => 'active' ) );
 		$this->assertSame( array( 'label' => 'Platform', 'status' => 'active' ), ( new Autoload() )->owner( 'siteurl' ) );

@@ -25,12 +25,21 @@ final class Scheduler implements Service {
 	private Runner $runner;
 
 	/**
+	 * Times the key pages.
+	 *
+	 * @var Timing\Timings|null
+	 */
+	private ?Timing\Timings $timings;
+
+	/**
 	 * Sets up the schedule.
 	 *
-	 * @param Runner $runner Runs the checks.
+	 * @param Runner              $runner  Runs the checks.
+	 * @param Timing\Timings|null $timings Times the key pages.
 	 */
-	public function __construct( Runner $runner ) {
-		$this->runner = $runner;
+	public function __construct( Runner $runner, ?Timing\Timings $timings = null ) {
+		$this->runner  = $runner;
+		$this->timings = $timings;
 	}
 
 	/**
@@ -55,6 +64,9 @@ final class Scheduler implements Service {
 	 */
 	public function run(): void {
 		$this->runner->run( array( 'source' => 'cron' ) );
+		if ( $this->timings && $this->timings->enabled() ) {
+			$this->timings->run( 'cron' );
+		}
 		Probe::purge();
 	}
 
@@ -63,5 +75,6 @@ final class Scheduler implements Service {
 	 */
 	public static function unschedule(): void {
 		wp_clear_scheduled_hook( self::HOOK );
+		wp_clear_scheduled_hook( Timing\Timings::HOOK );
 	}
 }

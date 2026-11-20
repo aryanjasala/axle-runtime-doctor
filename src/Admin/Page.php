@@ -107,6 +107,20 @@ final class Page implements Service {
 	private PageCachePanel $page_cache;
 
 	/**
+	 * The timeline on the Compare tab.
+	 *
+	 * @var TimelinePanel
+	 */
+	private TimelinePanel $timeline;
+
+	/**
+	 * The slow queries of the latest report, for the check's row.
+	 *
+	 * @var array
+	 */
+	private array $slow = array();
+
+	/**
 	 * Sets up the screen.
 	 *
 	 * @param Settings       $settings Settings.
@@ -119,8 +133,9 @@ final class Page implements Service {
 	 * @param Registry       $registry The checks.
 	 * @param ComparePanel   $compare  The Compare tab.
 	 * @param PageCachePanel $page_cache The Page cache tab.
+	 * @param TimelinePanel  $timeline The timeline on the Compare tab.
 	 */
-	public function __construct( Settings $settings, Runner $runner, History $history, Fixes $fixes, Hosts $hosts, Autoload $autoload, Alerts $alerts, Registry $registry, ComparePanel $compare, PageCachePanel $page_cache ) {
+	public function __construct( Settings $settings, Runner $runner, History $history, Fixes $fixes, Hosts $hosts, Autoload $autoload, Alerts $alerts, Registry $registry, ComparePanel $compare, PageCachePanel $page_cache, TimelinePanel $timeline ) {
 		$this->settings   = $settings;
 		$this->runner     = $runner;
 		$this->history    = $history;
@@ -131,6 +146,7 @@ final class Page implements Service {
 		$this->registry   = $registry;
 		$this->compare    = $compare;
 		$this->page_cache = $page_cache;
+		$this->timeline   = $timeline;
 	}
 
 	/**
@@ -244,13 +260,6 @@ final class Page implements Service {
 		);
 
 		switch ( $tab ) {
-			case 'history':
-				$tabs[] = array(
-					'id'      => 'history',
-					'title'   => __( 'History', 'axle-runtime-doctor' ),
-					'content' => '<p>' . esc_html__( 'A snapshot is stored after each full run, and the checks run once a day on their own. The last 30 are kept.', 'axle-runtime-doctor' ) . '</p><p>' . esc_html__( 'A check that got worse than in the snapshot before is a regression. It is marked here, shown in an admin notice and emailed to the alert recipients.', 'axle-runtime-doctor' ) . '</p>',
-				);
-				break;
 			case 'page-cache':
 				$tabs[] = array(
 					'id'      => 'cache-test',
@@ -270,6 +279,11 @@ final class Page implements Service {
 				break;
 			case 'compare':
 				$tabs[] = array(
+					'id'      => 'compare-day',
+					'title'   => __( 'With another day', 'axle-runtime-doctor' ),
+					'content' => '<p>' . esc_html__( 'The key pages are timed from the server once a day and after each update, with page caches left out. A page that got slower is matched to the updates made since the last timing.', 'axle-runtime-doctor' ) . '</p><p>' . esc_html__( 'Confirm it loads the page once without one plugin, to see whether that plugin adds the time. It needs a small must-use file that you switch on in the settings, and it acts on that one request only.', 'axle-runtime-doctor' ) . '</p><p>' . esc_html__( 'A snapshot of every check is stored after each full run. A check that got worse than in the snapshot before is a regression: marked here, shown in an admin notice and emailed to the alert recipients.', 'axle-runtime-doctor' ) . '</p>',
+				);
+				$tabs[] = array(
 					'id'      => 'compare-export',
 					'title'   => __( 'Share a report', 'axle-runtime-doctor' ),
 					'content' => '<p>' . esc_html__( 'Download this site\'s report as a JSON file, or copy it as text. Paths, hostnames, email addresses and IP addresses are replaced first, so the file holds nothing that names the server.', 'axle-runtime-doctor' ) . '</p><p>' . esc_html__( 'If the other site runs Runtime Doctor too, make a one-time code instead. The code works once and for a few minutes.', 'axle-runtime-doctor' ) . '</p>',
@@ -283,13 +297,6 @@ final class Page implements Service {
 					'id'      => 'compare-read',
 					'title'   => __( 'Read the comparison', 'axle-runtime-doctor' ),
 					'content' => '<p>' . esc_html__( 'Differences come first. A check that has another verdict on each site is listed with the worse side. A setting that differs, such as how many files OPcache holds, says what that does to the speed.', 'axle-runtime-doctor' ) . '</p><p>' . esc_html__( 'Checks with the same verdict but other numbers, and everything identical, are folded away below.', 'axle-runtime-doctor' ) . '</p>',
-				);
-				break;
-			case 'slow-queries':
-				$tabs[] = array(
-					'id'      => 'slow-queries',
-					'title'   => __( 'Slow queries', 'axle-runtime-doctor' ),
-					'content' => '<p>' . esc_html__( 'Each run loads the key pages of the site with query logging on and groups the queries by shape, with numbers and strings taken out. The slowest total time comes first.', 'axle-runtime-doctor' ) . '</p>',
 				);
 				break;
 			case 'settings':
@@ -349,8 +356,23 @@ final class Page implements Service {
 	private static function tab(): string {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only tab switch.
 		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'checks';
+		// History and Compare are one tab, and Slow queries is a part of its check.
+		$tab = 'history' === $tab ? 'compare' : ( 'slow-queries' === $tab ? 'checks' : $tab );
 
-		return in_array( $tab, array( 'checks', 'page-cache', 'history', 'compare', 'slow-queries', 'settings' ), true ) ? $tab : 'checks';
+		return in_array( $tab, array( 'checks', 'page-cache', 'compare', 'settings' ), true ) ? $tab : 'checks';
+	}
+
+	/**
+	 * The view of the Compare tab: day (with another day) or site (with another site).
+	 *
+	 * @return string
+	 */
+	public static function view(): string {
+		// phpcs:disable WordPress.Security.NonceVerification.Recommended -- Read-only view switch.
+		$view = isset( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
+		// phpcs:enable
+
+		return 'site' === $view ? 'site' : 'day';
 	}
 
 	/**
@@ -363,12 +385,10 @@ final class Page implements Service {
 
 		$tab  = self::full() ? self::tab() : 'checks';
 		$tabs = array(
-			'checks'       => __( 'Checks', 'axle-runtime-doctor' ),
-			'page-cache'   => __( 'Page cache', 'axle-runtime-doctor' ),
-			'history'      => __( 'History', 'axle-runtime-doctor' ),
-			'compare'      => __( 'Compare', 'axle-runtime-doctor' ),
-			'slow-queries' => __( 'Slow queries', 'axle-runtime-doctor' ),
-			'settings'     => __( 'Settings', 'axle-runtime-doctor' ),
+			'checks'     => __( 'Checks', 'axle-runtime-doctor' ),
+			'page-cache' => __( 'Page cache', 'axle-runtime-doctor' ),
+			'compare'    => __( 'Compare', 'axle-runtime-doctor' ),
+			'settings'   => __( 'Settings', 'axle-runtime-doctor' ),
 		);
 
 		echo '<div class="wrap axle-ui ard-wrap">';
@@ -410,17 +430,11 @@ final class Page implements Service {
 		}
 
 		switch ( $tab ) {
-			case 'history':
-				$this->render_history();
-				break;
 			case 'page-cache':
 				$this->page_cache->render();
 				break;
 			case 'compare':
-				$this->compare->render();
-				break;
-			case 'slow-queries':
-				$this->render_slow_queries();
+				$this->render_compare();
 				break;
 			case 'settings':
 				$this->render_settings();
@@ -454,6 +468,7 @@ final class Page implements Service {
 			/* translators: %s: option name. */
 			'unchanged' => array( 'warning', sprintf( __( 'Nothing changed for %s: autoload was already in that state, or the option is gone.', 'axle-runtime-doctor' ), $option ) ),
 			'dismissed' => array( 'success', __( 'Notice dismissed.', 'axle-runtime-doctor' ) ),
+			'loader'    => array( 'error', __( 'Settings saved, but Confirm it stays off: the must-use plugins folder is not writable, or a file of another name is in the way.', 'axle-runtime-doctor' ) ),
 		);
 		if ( isset( $messages[ $message ] ) ) {
 			$undo = '';
@@ -503,6 +518,7 @@ final class Page implements Service {
 			return;
 		}
 
+		$this->slow = isset( $report['slow_queries'] ) && is_array( $report['slow_queries'] ) ? $report['slow_queries'] : array();
 		$this->summary( $report );
 		$this->groups( (array) $report['results'] );
 	}
@@ -512,12 +528,13 @@ final class Page implements Service {
 	 */
 	private function render_site_checks(): void {
 		echo '<p class="axle-intro">' . esc_html__( 'PHP, OPcache and the object cache are shared by every site of this network. The network admin sees them under Network Admin > Settings > Runtime Doctor. These checks are about this site.', 'axle-runtime-doctor' ) . '</p>';
-		$report = $this->runner->run(
+		$report     = $this->runner->run(
 			array(
 				'per_site' => true,
 				'source'   => 'screen',
 			)
 		);
+		$this->slow = isset( $report['slow_queries'] ) && is_array( $report['slow_queries'] ) ? $report['slow_queries'] : array();
 		$this->groups( (array) $report['results'] );
 	}
 
@@ -642,6 +659,9 @@ final class Page implements Service {
 		if ( 'db_autoload' === $id ) {
 			$this->autoload_table( $result );
 		}
+		if ( 'db_slow_queries' === $id ) {
+			$this->slow_details();
+		}
 		if ( 'page_cache' === $id ) {
 			echo '<p><a href="' . esc_url( self::url( 'page-cache' ) ) . '">' . esc_html__( 'See each page and what stops its cache', 'axle-runtime-doctor' ) . '</a></p>';
 		}
@@ -676,7 +696,7 @@ final class Page implements Service {
 		$transients = (array) ( $result['data']['transients'] ?? array() );
 		$inactive   = (array) ( $result['data']['inactive'] ?? array() );
 
-		echo '<table class="widefat striped ard-autoload"><caption>' . esc_html__( 'Biggest autoloaded options', 'axle-runtime-doctor' ) . '</caption><thead><tr>';
+		echo '<div class="axle-scroll" tabindex="0" role="region" aria-label="' . esc_attr__( 'Biggest autoloaded options', 'axle-runtime-doctor' ) . '"><table class="widefat striped ard-autoload"><caption>' . esc_html__( 'Biggest autoloaded options', 'axle-runtime-doctor' ) . '</caption><thead><tr>';
 		echo '<th scope="col">' . esc_html__( 'Option', 'axle-runtime-doctor' ) . '</th>';
 		echo '<th scope="col" class="num">' . esc_html__( 'Size', 'axle-runtime-doctor' ) . '</th>';
 		echo '<th scope="col">' . esc_html__( 'Owner', 'axle-runtime-doctor' ) . '</th>';
@@ -703,7 +723,7 @@ final class Page implements Service {
 			}
 			echo '</td></tr>';
 		}
-		echo '</tbody></table>';
+		echo '</tbody></table></div>';
 
 		foreach (
 			array(
@@ -738,7 +758,39 @@ final class Page implements Service {
 	}
 
 	/**
-	 * The History tab.
+	 * The Compare tab: with another day, or with another site.
+	 */
+	private function render_compare(): void {
+		$view  = self::view();
+		$views = array(
+			'day'  => __( 'With another day', 'axle-runtime-doctor' ),
+			'site' => __( 'With another site', 'axle-runtime-doctor' ),
+		);
+		echo '<ul class="subsubsub ard-views" aria-label="' . esc_attr__( 'Compare views', 'axle-runtime-doctor' ) . '">';
+		$last = array_key_last( $views );
+		foreach ( $views as $id => $label ) {
+			printf(
+				'<li><a href="%1$s"%2$s%3$s>%4$s</a>%5$s</li>',
+				esc_url( self::url( 'compare', array( 'view' => $id ) ) ),
+				$id === $view ? ' class="current" aria-current="page"' : '',
+				'',
+				esc_html( $label ),
+				$id !== $last ? ' |' : ''
+			);
+		}
+		echo '</ul><br class="clear">';
+
+		if ( 'site' === $view ) {
+			$this->compare->render();
+
+			return;
+		}
+		$this->timeline->render();
+		$this->render_history();
+	}
+
+	/**
+	 * The snapshots: each check over time, and one row per snapshot.
 	 */
 	private function render_history(): void {
 		$snapshots = $this->history->all();
@@ -756,14 +808,14 @@ final class Page implements Service {
 		}
 
 		echo '<h2 class="axle-card__title">' . esc_html__( 'Each check over time', 'axle-runtime-doctor' ) . '</h2>';
-		echo '<table class="widefat striped ard-history-checks"><thead><tr>';
+		echo '<div class="axle-scroll" tabindex="0" role="region" aria-label="' . esc_attr__( 'Each check over time', 'axle-runtime-doctor' ) . '"><table class="widefat striped ard-history-checks"><thead><tr>';
 		echo '<th scope="col">' . esc_html__( 'Check', 'axle-runtime-doctor' ) . '</th>';
 		echo '<th scope="col">' . esc_html__( 'Status, oldest first', 'axle-runtime-doctor' ) . '</th>';
 		echo '<th scope="col">' . esc_html__( 'Now', 'axle-runtime-doctor' ) . '</th>';
 		echo '</tr></thead><tbody>';
 		foreach ( (array) $latest['results'] as $id => $now ) {
 			$regressed = in_array( $id, (array) ( $latest['regressions'] ?? array() ), true );
-			echo '<tr class="' . ( $regressed ? 'ard-regressed' : '' ) . '" data-check="' . esc_attr( (string) $id ) . '"><th scope="row">' . esc_html( $labels[ $id ] ?? (string) $id );
+			echo '<tr class="' . ( $regressed ? 'ard-regressed' : '' ) . '" data-check="' . esc_attr( (string) $id ) . '"><th scope="row"><a href="' . esc_url( self::url( 'checks' ) . '#ard-check-' . rawurlencode( (string) $id ) ) . '">' . esc_html( $labels[ $id ] ?? (string) $id ) . '</a>';
 			if ( $regressed ) {
 				echo ' <span class="axle-badge axle-badge--error ard-flag">' . esc_html__( 'Regression', 'axle-runtime-doctor' ) . '</span>';
 			}
@@ -777,10 +829,10 @@ final class Page implements Service {
 			echo '</ol></td>';
 			echo '<td>' . self::badge( (string) $now['status'] ) . '</td></tr>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in badge().
 		}
-		echo '</tbody></table>';
+		echo '</tbody></table></div>';
 
 		echo '<h2 class="axle-card__title ard-snapshots-title">' . esc_html__( 'Snapshots', 'axle-runtime-doctor' ) . '</h2>';
-		echo '<table class="widefat striped ard-snapshots"><thead><tr>';
+		echo '<div class="axle-scroll" tabindex="0" role="region" aria-label="' . esc_attr__( 'Snapshots', 'axle-runtime-doctor' ) . '"><table class="widefat striped ard-snapshots"><thead><tr>';
 		foreach ( array( __( 'Time', 'axle-runtime-doctor' ), __( 'Host', 'axle-runtime-doctor' ), __( 'Critical', 'axle-runtime-doctor' ), __( 'Recommended', 'axle-runtime-doctor' ), __( 'Good', 'axle-runtime-doctor' ), __( 'Regressions', 'axle-runtime-doctor' ) ) as $heading ) {
 			echo '<th scope="col">' . esc_html( $heading ) . '</th>';
 		}
@@ -800,24 +852,23 @@ final class Page implements Service {
 			echo '<td>' . (int) $counts[ Result::CRITICAL ] . '</td><td>' . (int) $counts[ Result::RECOMMENDED ] . '</td><td>' . (int) $counts[ Result::GOOD ] . '</td>';
 			echo '<td>' . esc_html( $regressions ? implode( ', ', $regressions ) : '-' ) . '</td></tr>';
 		}
-		echo '</tbody></table>';
+		echo '</tbody></table></div>';
 	}
 
 	/**
-	 * The Slow queries tab.
+	 * The queries behind the slow queries check: the pages loaded and the
+	 * queries by total time, in an expanding block of the check's row.
 	 */
-	private function render_slow_queries(): void {
-		$report = $this->history->latest();
-		$slow   = is_array( $report ) && isset( $report['slow_queries'] ) ? (array) $report['slow_queries'] : array();
-		echo '<p class="axle-intro">' . esc_html__( 'Each run loads the key pages of the site with query logging on and groups the queries by shape, with numbers and strings taken out. Slowest total time first.', 'axle-runtime-doctor' ) . '</p>';
+	private function slow_details(): void {
+		$slow = $this->slow;
 		if ( ! $slow ) {
-			echo '<div class="axle-empty ard-empty"><p>' . esc_html__( 'No queries measured yet. Run the checks from the Checks tab first.', 'axle-runtime-doctor' ) . '</p></div>';
-
 			return;
 		}
 
 		$limit = (float) ( $slow['threshold_ms'] ?? Settings::slow_query_ms() );
-		echo '<h2 class="axle-card__title">' . esc_html__( 'Pages loaded', 'axle-runtime-doctor' ) . '</h2><ul class="ard-pages">';
+		echo '<details class="ard-slow-details"><summary>' . esc_html__( 'Queries by total time', 'axle-runtime-doctor' ) . '</summary>';
+		echo '<p class="description">' . esc_html__( 'Each run loads the key pages of the site with query logging on and groups the queries by shape, with numbers and strings taken out. Slowest total time first.', 'axle-runtime-doctor' ) . '</p>';
+		echo '<h4>' . esc_html__( 'Pages loaded', 'axle-runtime-doctor' ) . '</h4><ul class="ard-pages">';
 		foreach ( (array) ( $slow['probed'] ?? array() ) as $url ) {
 			echo '<li><a href="' . esc_url( (string) $url ) . '">' . esc_html( (string) $url ) . '</a></li>';
 		}
@@ -827,7 +878,7 @@ final class Page implements Service {
 		}
 		echo '</ul>';
 
-		echo '<table class="widefat striped ard-slow"><caption>' . esc_html__( 'Queries by total time', 'axle-runtime-doctor' ) . '</caption><thead><tr>';
+		echo '<div class="axle-scroll" tabindex="0" role="region" aria-label="' . esc_attr__( 'Queries by total time', 'axle-runtime-doctor' ) . '"><table class="widefat striped ard-slow"><caption>' . esc_html__( 'Queries by total time', 'axle-runtime-doctor' ) . '</caption><thead><tr>';
 		foreach ( array( __( 'Query', 'axle-runtime-doctor' ), __( 'Component', 'axle-runtime-doctor' ), __( 'Calls', 'axle-runtime-doctor' ), __( 'Total ms', 'axle-runtime-doctor' ), __( 'Average ms', 'axle-runtime-doctor' ), __( 'Slowest ms', 'axle-runtime-doctor' ) ) as $heading ) {
 			echo '<th scope="col">' . esc_html( $heading ) . '</th>';
 		}
@@ -842,7 +893,7 @@ final class Page implements Service {
 			echo '<td class="num">' . esc_html( number_format_i18n( (float) $digest['total_ms'] / $calls, 2 ) ) . '</td>';
 			echo '<td class="num">' . esc_html( number_format_i18n( (float) $digest['max_ms'], 2 ) ) . '</td></tr>';
 		}
-		echo '</tbody></table>';
+		echo '</tbody></table></div></details>';
 	}
 
 	/**
@@ -864,6 +915,8 @@ final class Page implements Service {
 			'disk_free_mb'        => __( 'Least free disk space (MB)', 'axle-runtime-doctor' ),
 			'eol_warning_days'    => __( 'Warn before end of support (days)', 'axle-runtime-doctor' ),
 			'bootstrap_ms'        => __( 'Slowest plugin load when OPcache is hidden (ms)', 'axle-runtime-doctor' ),
+			'timing_ms'           => __( 'Page got slower by at least (ms)', 'axle-runtime-doctor' ),
+			'timing_pct'          => __( 'and by at least (%)', 'axle-runtime-doctor' ),
 		);
 
 		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" class="ard-settings">';
@@ -890,6 +943,15 @@ final class Page implements Service {
 		echo '<tr><th scope="row">' . esc_html__( 'PHP patch level', 'axle-runtime-doctor' ) . '</th><td>';
 		echo '<input type="hidden" name="patch_check" value="0"><label><input type="checkbox" name="patch_check" value="1" aria-describedby="ard-patch-help"' . checked( ! empty( $settings['patch_check'] ), true, false ) . '> ' . esc_html__( 'Compare PHP with the latest releases on php.net', 'axle-runtime-doctor' ) . '</label>';
 		echo '<p class="description" id="ard-patch-help">' . esc_html__( 'Fetches the public release list from php.net once a week. Nothing about this site is sent. Off by default.', 'axle-runtime-doctor' ) . '</p></td></tr>';
+
+		echo '<tr><th scope="row">' . esc_html__( 'Page timing', 'axle-runtime-doctor' ) . '</th><td>';
+		echo '<input type="hidden" name="timing" value="0"><label><input type="checkbox" name="timing" value="1" aria-describedby="ard-timing-help"' . checked( ! empty( $settings['timing'] ), true, false ) . '> ' . esc_html__( 'Time the key pages every day and after each update', 'axle-runtime-doctor' ) . '</label>';
+		echo '<p class="description" id="ard-timing-help">' . esc_html__( 'Loads your key pages from the server with page caches left out, and matches a slowdown to the updates made since the last timing. Requests go to this site only.', 'axle-runtime-doctor' ) . '</p></td></tr>';
+
+		echo '<tr id="ard-confirm"><th scope="row">' . esc_html__( 'Confirm it', 'axle-runtime-doctor' ) . '</th><td>';
+		echo '<input type="hidden" name="confirm" value="0"><label><input type="checkbox" name="confirm" value="1" aria-describedby="ard-confirm-help"' . checked( ! empty( $settings['confirm'] ), true, false ) . '> ' . esc_html__( 'Allow loading one page once without one plugin, to see if that plugin made it slower', 'axle-runtime-doctor' ) . '</label>';
+		/* translators: %s: file name. */
+		echo '<p class="description" id="ard-confirm-help">' . esc_html( sprintf( __( 'Adds one small file to the must-use plugins folder (%s). It does nothing for visitors: it acts only on a request that carries a single-use token made a moment ago, and every other request loads every plugin. The file is removed when you turn this off, deactivate the plugin or delete it.', 'axle-runtime-doctor' ), \AryanX\Axle\RuntimeDoctor\Timing\Loader::FILE ) ) . '</p></td></tr>';
 
 		echo '<tr><th scope="row"><label for="ard-recipients">' . esc_html__( 'Alert recipients', 'axle-runtime-doctor' ) . '</label></th><td>';
 		echo '<input type="text" class="regular-text" id="ard-recipients" name="recipients" aria-describedby="ard-recipients-help" value="' . esc_attr( (string) $settings['recipients'] ) . '">';
@@ -946,7 +1008,7 @@ final class Page implements Service {
 		self::verify( 'axle_runtime_doctor_settings' );
 		// phpcs:disable WordPress.Security.NonceVerification.Missing -- Checked in self::verify().
 		$input = array();
-		foreach ( array( 'host', 'sampling', 'sample_rate', 'patch_check', 'recipients' ) as $key ) {
+		foreach ( array( 'host', 'sampling', 'sample_rate', 'patch_check', 'recipients', 'timing', 'confirm' ) as $key ) {
 			if ( isset( $_POST[ $key ] ) ) {
 				$input[ $key ] = sanitize_text_field( wp_unslash( $_POST[ $key ] ) );
 			}
@@ -956,7 +1018,8 @@ final class Page implements Service {
 		}
 		// phpcs:enable
 		$this->settings->save( $input );
-		self::back( 'settings', array( 'ard-message' => 'saved' ) );
+		$unwritable = ! empty( $input['confirm'] ) && ! $this->settings->get( 'confirm' );
+		self::back( 'settings', array( 'ard-message' => $unwritable ? 'loader' : 'saved' ) );
 	}
 
 	/**

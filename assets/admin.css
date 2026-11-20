@@ -181,3 +181,95 @@ tr.ard-regressed td {
 	list-style: disc;
 	padding-left: 20px;
 }
+
+/* Which update made the site slower: the timeline, a slowdown and the Confirm it result. */
+.ard-views {
+	margin: 0 0 8px;
+}
+
+.ard-measure {
+	margin: 8px 0 16px;
+}
+
+.ard-slowdown {
+	margin: 0 0 16px;
+	padding: 8px 12px;
+	border-left: 4px solid #dba617;
+	background: #fcf9e8;
+}
+
+.ard-slowdown p {
+	margin: 4px 0;
+}
+
+.ard-candidates {
+	margin: 4px 0 4px 20px;
+	list-style: disc;
+}
+
+.ard-confirm-result {
+	display: inline-block;
+	margin-right: 8px;
+}
+
+.ard-confirm-result--confirmed {
+	font-weight: 600;
+}
+
+.ard-timeline {
+	margin: 8px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ard-tl {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 4px 8px;
+	margin: 0;
+	padding: 6px 0;
+	border-top: 1px solid #dcdcde;
+}
+
+.ard-tl-time {
+	min-width: 8em;
+	color: #50575e;
+}
+
+.ard-slow-details {
+	margin: 8px 0;
+}
+
+.ard-slow-details summary {
+	cursor: pointer;
+}
+
+/* Fields stay inside their card on a phone. */
+@media screen and (max-width: 782px) {
+	.ard-wrap .form-table td input.regular-text,
+	.ard-wrap .form-table td input.large-text,
+	.ard-wrap .form-table td textarea,
+	.ard-wrap .form-table td input[type="file"] {
+		box-sizing: border-box;
+		width: 100%;
+		max-width: 100%;
+	}
+
+	.ard-wrap .form-table,
+	.ard-wrap .form-table tbody,
+	.ard-wrap .form-table tr {
+		display: block;
+		width: auto;
+	}
+
+	.ard-wrap .form-table td {
+		padding-right: 0;
+		padding-left: 0;
+	}
+}
+
+/* Screen-reader text is absolutely positioned: without a positioned parent it sits outside the scrolling box and widens the page on older WordPress. */
+.ard-wrap .axle-scroll {
+	position: relative;
+}
