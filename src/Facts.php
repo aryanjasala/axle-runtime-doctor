@@ -7,6 +7,8 @@
 
 namespace AryanX\Axle\RuntimeDoctor;
 
+use AryanX\Axle\RuntimeDoctor\Admin\AxleUi;
+
 defined( 'ABSPATH' ) || exit;
 
 /**
@@ -131,7 +133,7 @@ final class Facts {
 	 * @return string
 	 */
 	private function fact_environment(): string {
-		return wp_get_environment_type();
+		return AxleUi::environment_type();
 	}
 
 	/**
@@ -723,7 +725,7 @@ final class Facts {
 				'redirection' => 0,
 				// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Core filter for loopback requests.
 				'sslverify'   => apply_filters( 'https_local_ssl_verify', false ),
-				'headers'     => array( 'Cache-Control' => 'no-cache' ),
+				'headers'     => array( 'Cache-Control' => 'no-cache' ) + AxleUi::loopback_headers( home_url( '/' ) ),
 			)
 		);
 		// phpcs:enable

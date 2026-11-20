@@ -7,6 +7,7 @@
 
 namespace AryanX\Axle\RuntimeDoctor\PageCache;
 
+use AryanX\Axle\RuntimeDoctor\Admin\AxleUi;
 use AryanX\Axle\RuntimeDoctor\Probe;
 use WP_Error;
 
@@ -407,6 +408,9 @@ final class Scanner {
 
 			$args['headers']['Host'] = $host . ( $port ? ':' . $port : '' );
 		}
+
+		// Lets the request through Staging Guard's gate; empty for any other host.
+		$args['headers'] += AxleUi::loopback_headers( $url );
 
 		$start = microtime( true );
 		// phpcs:disable WordPressVIPMinimum.Functions.RestrictedFunctions.wp_remote_get_wp_remote_get, WordPressVIPMinimum.Performance.RemoteRequestTimeout.timeout_timeout -- The test itself: it asks this site's own pages the way a visitor does.

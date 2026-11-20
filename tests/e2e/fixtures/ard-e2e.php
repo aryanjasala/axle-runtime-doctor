@@ -76,3 +76,11 @@ add_action(
 		}
 	}
 );
+
+// Timing tests: how many pages a timing run loads (the option ard_e2e_timing_pages, default 1).
+add_filter(
+	'axle_runtime_doctor_timing_page_count',
+	static function () {
+		return max( 1, (int) get_option( 'ard_e2e_timing_pages', 1 ) );
+	}
+);

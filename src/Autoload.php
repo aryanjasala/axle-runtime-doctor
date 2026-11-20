@@ -123,17 +123,12 @@ final class Autoload {
 				'label'  => substr( $name, 11 ),
 				'status' => 'theme',
 			);
-		} elseif ( function_exists( 'axle_leftovers_owner_of' ) ) {
-			$found = axle_leftovers_owner_of( 'option', $name );
-			if ( is_array( $found ) && ! empty( $found['name'] ) ) {
+		} elseif ( function_exists( 'AryanX\Axle\Leftovers\owner_of' ) ) {
+			$found = \AryanX\Axle\Leftovers\owner_of( 'option', $name );
+			if ( is_array( $found ) && ! empty( $found['owner_name'] ) ) {
 				$owner = array(
-					'label'  => (string) $found['name'],
-					'status' => ! empty( $found['active'] ) ? 'active' : 'inactive',
-				);
-			} elseif ( is_string( $found ) && '' !== $found ) {
-				$owner = array(
-					'label'  => $found,
-					'status' => 'unknown',
+					'label'  => (string) $found['owner_name'],
+					'status' => ! empty( $found['in_use'] ) ? 'active' : 'inactive',
 				);
 			}
 		}

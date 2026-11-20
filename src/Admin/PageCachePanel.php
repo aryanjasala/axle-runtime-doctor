@@ -298,9 +298,11 @@ final class PageCachePanel implements Service {
 
 		$this->pages( (array) $scan['pages'] );
 
-		if ( $result->details ) {
+		// A blocker already shows in its page's row of the table, so it is not listed a second time.
+		$more = self::without_blockers( $result->details, (array) $scan['pages'] );
+		if ( $more ) {
 			echo '<h3>' . esc_html__( 'What we found', 'axle-runtime-doctor' ) . '</h3><ul class="ard-details ard-cache-details">';
-			foreach ( $result->details as $line ) {
+			foreach ( $more as $line ) {
 				echo '<li>' . esc_html( $line ) . '</li>';
 			}
 			echo '</ul>';
@@ -310,6 +312,43 @@ final class PageCachePanel implements Service {
 			FixCard::render( $this->fixes, $result->to_array(), $this->hosts->current() );
 		}
 		echo '</section>';
+	}
+
+	/**
+	 * The detail lines that are not a page's blocker, which the table already shows.
+	 *
+	 * @param string[] $details The check's detail lines.
+	 * @param array    $pages   Pages of a scan.
+	 * @return string[]
+	 */
+	public static function without_blockers( array $details, array $pages ): array {
+		$shown = array();
+		foreach ( $pages as $page ) {
+			if ( ! is_array( $page ) ) {
+				continue;
+			}
+			foreach ( (array) ( $page['blockers'] ?? array() ) as $blocker ) {
+				$detail = is_array( $blocker ) ? (string) ( $blocker['detail'] ?? '' ) : '';
+				if ( '' !== $detail ) {
+					$shown[] = PageCacheCheck::path( (string) ( $page['url'] ?? '' ) ) . ': ' . $detail;
+				}
+			}
+		}
+
+		return array_values(
+			array_filter(
+				$details,
+				static function ( $line ) use ( $shown ) {
+					foreach ( $shown as $prefix ) {
+						if ( 0 === strpos( (string) $line, $prefix ) ) {
+							return false;
+						}
+					}
+
+					return true;
+				}
+			)
+		);
 	}
 
 	/**

@@ -95,7 +95,7 @@ final class IntegrationsTest extends DoctorTestCase {
 		Filters\expectApplied( 'axle_runtime_doctor_site_health_tests' )->once()->andReturn( array( 'php_branch', 'no_such_check' ) );
 		$tests = ( new SiteHealth( $this->runner, $this->history, $this->registry ) )->add_tests( array( 'direct' => array( 'core' => array() ) ) );
 
-		$this->assertSame( array( 'core', 'axle_runtime_doctor_php_branch' ), array_keys( $tests['direct'] ) );
+		$this->assertSame( array( 'core', 'axle_runtime_doctor_php_branch', 'axle_runtime_doctor_timing' ), array_keys( $tests['direct'] ) );
 		$this->assertSame( 'PHP support', $tests['direct']['axle_runtime_doctor_php_branch']['label'] );
 	}
 

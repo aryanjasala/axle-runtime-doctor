@@ -40,8 +40,9 @@ A site is slow and the host says everything is fine. Often the cause is runtime 
 - **Cron, loopback and files**: `DISABLE_WP_CRON` with nothing running events, duplicate events, loopback through a CDN, PHP in uploads, file owner mismatches, disk space
 - **A fix per host**: detects WP Engine, Pressable, Kinsta, WordPress.com, VIP, Pantheon, GoDaddy, Flywheel, SiteGround, Cloudways, Hostinger, cPanel, Plesk, nginx and Apache with the evidence, lets you correct it, and gives the setting, where it lives and a ready-to-paste **support ticket**
 - **Web values, not WP-CLI's**: WP-CLI, cron and abilities run the checks through a token-authenticated loopback probe, and say so when it fails
-- **History and alerts**: a daily run keeps 30 snapshots, and a check that gets worse sends an email and shows a notice
-- **Compare two sites**: "It is only slow on production." Export a report with paths, hostnames and addresses taken out, import the other site's (a file, pasted text, or a one-time code that fetches it over https), and see every check and PHP, OPcache and WordPress setting side by side, differences first, each with what it means. Imported reports are kept, named and dated, so "before the host migration" can be compared with "after"
+- **Which update made the site slower**: "Home page server time went from 180 ms to 520 ms after Elementor 3.25 to 3.26 on Tuesday." The key pages are timed from the server every day and after each update (warm, page caches told to step aside, median of 5), updates go on a timeline, and the regression email names the update. **Confirm it** loads the page once without that plugin, for one tokenized request, to see whether it adds the time. It needs a small must-use file you switch on yourself, and it never touches a visitor's request
+- **History and alerts**: a daily run keeps 30 snapshots, and a check that gets worse sends an email and shows a notice. Each row of the history opens its check
+- **Compare two sites, or two days**: "It is only slow on production." Export a report with paths, hostnames and addresses taken out, import the other site's (a file, pasted text, or a one-time code that fetches it over https), and see every check and PHP, OPcache and WordPress setting side by side, differences first, each with what it means. Imported reports are kept, named and dated, so "before the host migration" can be compared with "after"
 - **What keeps the page cache from working**: asks your home page, latest post and a page twice, as a visitor, and reads the headers. Says whether a cache answered (Cloudflare, Kinsta, SiteGround, LiteSpeed, Varnish, WP Engine, Fastly, CloudFront and more) and finds what stops one: a cookie on a page for logged-out visitors, `Cache-Control: no-store` or `private`, `Vary: Cookie`, a PHP session, `nocache_headers()`, `DONOTCACHEPAGE`. A request that traces itself names the plugin or theme when it can, says "one of these" when it cannot, and never guesses. The fix for your host and a support ticket come with it, and the result is part of the daily history and Site Health
 - Site Health tests and Info, WP-CLI, abilities for AI agents, multisite, and a filter or action for every default and event
 
@@ -71,6 +72,15 @@ wp axle-runtime-doctor fix opcache_coverage   # the fix and a support ticket to 
 wp axle-runtime-doctor autoload off my_plugin_cache
 ```
 
+See which update made a page slower, and check it:
+
+```sh
+wp axle-runtime-doctor timing run
+wp axle-runtime-doctor updates
+wp axle-runtime-doctor settings --confirm=on
+wp axle-runtime-doctor confirm <update-id>
+```
+
 ## Screenshots
 
 <table>
@@ -91,7 +101,7 @@ wp axle-runtime-doctor autoload off my_plugin_cache
 
 | Doc | What it covers |
 | --- | --- |
-| [Reference](docs/REFERENCE.md) | How the checks run, comparing two sites, the page cache test, every check, hooks, abilities, WP-CLI, data and privacy |
+| [Reference](docs/REFERENCE.md) | How the checks run, comparing two sites, the page cache test, which update made the site slower, every check, hooks, abilities, WP-CLI, data and privacy |
 | [Development](docs/DEVELOPMENT.md) | Local setup, commands and tests |
 | [Contributing](docs/CONTRIBUTING.md) | Pull requests, required checks and PR titles |
 | [Releasing](docs/RELEASING.md) | How merged pull requests become releases |
@@ -125,6 +135,7 @@ src/
 ├── Privacy.php           exporter, eraser, policy text
 ├── Compare/              export, import, compare, kept reports, direct mode
 ├── PageCache/            header analysis, the scanner, the tracer, blame
+├── Timing/               update log, page timings, Confirm it and its must-use loader
 ├── Checks/               one class per check, plus Context and Registry
 ├── Admin/                the screen, the Compare and Page cache tabs, the regression notice
 ├── Health/               Site Health tests and Info
@@ -153,7 +164,7 @@ Small plugins that each fill one gap in WordPress, all free with no pro version.
 | <img src="https://raw.githubusercontent.com/aryanjasala/axle-review/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Axle Review](https://github.com/aryanjasala/axle-review) | Share drafts through private links, collect outside feedback as block Notes, and know when an approval is out of date |
 | <img src="https://raw.githubusercontent.com/aryanjasala/axle-smoke-test/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Axle Smoke Test](https://github.com/aryanjasala/axle-smoke-test) | Check key pages after every update or deploy, see what broke and roll it back |
 | <img src="https://raw.githubusercontent.com/aryanjasala/block-doctor/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Block Doctor](https://github.com/aryanjasala/block-doctor) | Scan the site for broken blocks and fix them in bulk, with undo. See which posts use each block before you switch a plugin off |
-| <img src="https://raw.githubusercontent.com/aryanjasala/block-theme-ops/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Block Theme Ops](https://github.com/aryanjasala/block-theme-ops) | Find Site Editor changes that override your theme files, see the diff, reset them, send them to Git, move them to another site or lock them |
+| <img src="https://raw.githubusercontent.com/aryanjasala/block-theme-ops/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Block Theme Ops](https://github.com/aryanjasala/block-theme-ops) | Find Site Editor changes that override your theme files, merge a theme update into them, reset them, send them to Git, move them to another site or lock them |
 | <img src="https://raw.githubusercontent.com/aryanjasala/role-right-sizer/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Role Right-Sizer](https://github.com/aryanjasala/role-right-sizer) | Recommends the smallest role each user needs, from what they actually do |
 | <img src="https://raw.githubusercontent.com/aryanjasala/update-rehearsal/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [Update Rehearsal](https://github.com/aryanjasala/update-rehearsal) | Try plugin, theme, core and PHP updates, a new plugin, or life without one, on a disposable copy of your site in WordPress Playground first |
 | <img src="https://raw.githubusercontent.com/aryanjasala/user-session-manager/main/.wordpress-org/icon-128x128.png" alt="" width="32"> | [User Session Manager](https://github.com/aryanjasala/user-session-manager) | See every device signed in, sign out one, and limit sessions per role |

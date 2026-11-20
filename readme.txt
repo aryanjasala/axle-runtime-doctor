@@ -28,6 +28,7 @@ Part of [Axle](https://axlewp.com/) by AryanX, a family of free plugins for runn
 * **Database**: the 20 biggest autoloaded options with their owner, autoloaded transients, options of inactive plugins, slow queries on your key pages, MyISAM tables, the largest tables, tables without a primary key, and the end of life of your MySQL or MariaDB release.
 * **Cron and loopback**: whether a real cron runs events when WP-Cron is off, duplicate events, events nothing handles, loopback speed and whether it goes out through a CDN or firewall.
 * **Page cache**: whether a cache answers a visitor, and what stops it (see below).
+* **Page timing**: the server time of your key pages over time, matched to updates (see below).
 * **Files**: wp-config.php readable by everyone, PHP files in uploads, PHP running as a different user from the file owner, wp-content not writable, and free disk space.
 
 = Real values, not WP-CLI's =
@@ -59,16 +60,24 @@ A page that no cache answered is loaded once more and watches itself, to find wh
 
 You get the fix for your host and a support ticket with what the pages send. The result is part of the daily history and Site Health.
 
+= Which update made the site slower =
+
+"The site feels slower this week and the host says nothing changed." The key pages (home, latest post, latest page) are timed from the server every day and after each update. Each page is loaded the way a visitor loads it, with every page cache told to step aside: one warm-up request, then five, and the median of the server time is kept. Updates (plugins, themes, WordPress, and a deploy Smoke Test notices) go on a timeline with the version before and after.
+
+When a page gets at least 100 ms and 30 percent slower, you get the sentence, in the notice and in the email subject: "Home page server time went from 180 ms to 520 ms after Elementor 3.25 to 3.26 on Tuesday." Both limits are settings.
+
+If more than one update came in, **Confirm it** loads the page once without that plugin and compares the two server times, so you see which one adds the time. Nothing is deactivated. It needs a small must-use file that you switch on yourself in the settings. The file does nothing for visitors: it acts only on a request that carries a single-use token made a moment ago. No token, a wrong, used or expired token, and every plugin loads. It is removed when you turn Confirm it off, when you deactivate the plugin and when you delete it.
+
 = History and alerts =
 
-The checks run once a day and keep the last 30 snapshots. When a check gets worse, for example OPcache stops caching wp-content after the host moved the site, you get an email and a notice in wp-admin.
+The checks run once a day and keep the last 30 snapshots. Compare, "With another day", shows each check over time, and each row opens its check. When a check gets worse, for example OPcache stops caching wp-content after the host moved the site, you get an email and a notice in wp-admin.
 
 = Also =
 
 * Site Health shows the checks that matter most, and its Info tab lists every value.
 * "Turn autoload off" on any listed option, from the screen, WP-CLI or an ability, with an Undo link. Options WordPress itself needs are never switched off. An action fires with the values before and after, so an activity log can undo it too.
 * On multisite the full screen is in Network Admin, and each site sees the checks about itself.
-* Abilities for AI agents on WordPress 6.9 and later: run-checks, get-report, list-slow-queries, get-page-cache, get-fix, export-report, list-imported-reports, compare-reports, disable-autoload and enable-autoload.
+* Abilities for AI agents on WordPress 6.9 and later: run-checks, get-report, list-slow-queries, get-page-cache, get-fix, export-report, list-imported-reports, compare-reports, disable-autoload, enable-autoload, get-timings, run-timing and confirm-update.
 
 = WP-CLI =
 
@@ -77,6 +86,9 @@ The checks run once a day and keep the last 30 snapshots. When a check gets wors
 `wp axle-runtime-doctor report`
 `wp axle-runtime-doctor history`
 `wp axle-runtime-doctor slow-queries`
+`wp axle-runtime-doctor timing [run|list]`
+`wp axle-runtime-doctor updates`
+`wp axle-runtime-doctor confirm <update-id>`
 `wp axle-runtime-doctor page-cache [--stored]`
 `wp axle-runtime-doctor autoload <off|on> <option>...`
 `wp axle-runtime-doctor export --file=production.json`
@@ -97,9 +109,17 @@ The PHP patch-level check can compare your PHP version with the release list on 
 
 Direct mode, for comparing two sites, makes one request when an administrator pastes a one-time code under Compare and chooses "Fetch the report". The request goes to the site address inside the code, over https, and carries only the code's token. The other site answers with its runtime report, which has paths, hostnames, email addresses and IP addresses replaced. Nothing is sent without that action, and you can turn direct mode off with the axle_runtime_doctor_direct_enabled filter.
 
-No other external requests are made. The loopback requests and the page cache test go to your own site.
+No other external requests are made. The loopback requests, the page timing and the page cache test go to your own site.
 
 == Frequently Asked Questions ==
+
+= Does Confirm it deactivate a plugin? =
+
+No. It loads one page, once, from the server, without one plugin, through a must-use file that reads a single-use token. The plugin stays active and every visitor gets it. The file is only written when you turn Confirm it on, and it is removed when you turn it off, deactivate Runtime Doctor or delete it.
+
+= Is the timing fair when a cache is on? =
+
+The timing asks the page with a unique address and tells caches to step aside, so it measures PHP. If a cache answers anyway, the page is marked and never counted as a slowdown.
 
 = Does it change my server settings? =
 
@@ -137,9 +157,10 @@ Its settings, the last 30 snapshots (status and value per check), the latest ful
 
 1. The checks, with OPcache skipping wp-content and the blacklist that causes it.
 2. How to fix it on Pressable, with the support ticket filled in.
-3. History: the day OPcache stopped caching wp-content.
-4. Slow queries on the key pages, grouped by shape, with the component that sent them.
+3. Compare, with another day: each check over time, and the day OPcache stopped caching wp-content.
+4. Slow queries open inside their check, grouped by shape, with the component that sent them.
 5. The page cache test: the cookie that makes every page skip the cache, and the plugin behind it.
+6. Which update made the site slower: the timeline, the sentence naming the update, and Confirm it.
 
 == Changelog ==
 

@@ -15,6 +15,7 @@ use AryanX\Axle\RuntimeDoctor\History;
 use AryanX\Axle\RuntimeDoctor\Result;
 use AryanX\Axle\RuntimeDoctor\Runner;
 use AryanX\Axle\RuntimeDoctor\Service;
+use AryanX\Axle\RuntimeDoctor\Timing\Timings;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -109,7 +110,57 @@ final class SiteHealth implements Service {
 			);
 		}
 
+		$tests['direct']['axle_runtime_doctor_timing'] = array(
+			'label' => __( 'Pages got slower after an update', 'axle-runtime-doctor' ),
+			'test'  => array( $this, 'timing_test' ),
+		);
+
 		return $tests;
+	}
+
+	/**
+	 * Whether the latest timing found a page that got slower, with the updates behind it.
+	 * Reads what is stored: it loads no page.
+	 *
+	 * @return array Site Health result.
+	 */
+	public function timing_test(): array {
+		$run  = Timings::latest();
+		$rows = Timings::latest_slowdowns();
+		$base = array(
+			'badge'   => array(
+				'label' => __( 'Performance', 'axle-runtime-doctor' ),
+				'color' => 'orange',
+			),
+			'actions' => sprintf( '<p><a href="%s">%s</a></p>', esc_url( Page::url( 'compare' ) . '#ard-timeline' ), esc_html__( 'See the timeline in Runtime Doctor', 'axle-runtime-doctor' ) ),
+			'test'    => 'axle_runtime_doctor_timing',
+		);
+
+		if ( ! $run ) {
+			return array(
+				'label'       => __( 'The key pages have not been timed yet', 'axle-runtime-doctor' ),
+				'status'      => 'good',
+				'description' => '<p>' . esc_html__( 'Runtime Doctor times your key pages once a day and after each update, and says which update made one slower.', 'axle-runtime-doctor' ) . '</p>',
+			) + $base;
+		}
+		if ( ! $rows ) {
+			return array(
+				'label'       => __( 'No page got slower in the latest timing', 'axle-runtime-doctor' ),
+				'status'      => 'good',
+				'description' => '<p>' . esc_html__( 'The server time of the key pages is steady.', 'axle-runtime-doctor' ) . '</p>',
+			) + $base;
+		}
+
+		$description = '';
+		foreach ( $rows as $row ) {
+			$description .= '<p>' . esc_html( (string) $row['summary'] ) . '</p>';
+		}
+
+		return array(
+			'label'       => (string) $rows[0]['summary'],
+			'status'      => 'recommended',
+			'description' => $description,
+		) + $base;
 	}
 
 	/**

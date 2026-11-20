@@ -48,6 +48,21 @@ The result is critical when a cache is in place and every page skips it, recomme
 
 Up to 6 pages and 2 traces are requested (so at most 14 requests), each with a 10 second timeout, and the test stops starting new pages after 20 seconds, so it fits in one web request. The last test is stored in `axle_runtime_doctor_page_cache` and read by Site Health, so Site Health never sends a request itself. The daily run and any full run refresh it and keep its status in the history.
 
+## Which update made the site slower
+
+The Compare tab, view **With another day**, shows it.
+
+- **What is timed.** The home page, the latest post and the latest page (three by default, `axle_runtime_doctor_timing_page_count`). Each page is loaded from the server as a visitor would load it, with no cookies, a unique query string, `Cache-Control: no-cache` and `DONOTCACHEPAGE` defined for that request. One warm-up request is thrown away, then five are timed, and the **median of the server time** is kept (the time PHP took, not the loopback). A page a cache still answered is marked, and never counted as a slowdown.
+- **When.** Once a day with the daily run, and about 45 seconds after each update (`upgrader_process_complete`), after a deploy Smoke Test noticed (`axle_smoke_test_deploy_detected`), and after Smoke Test finishes a run (`axle_smoke_test_run_finished`, only its last result, `final` true). Smoke Test runs less than five minutes apart do not start another timing.
+- **The match.** Updates are logged with the version before and after. A page that got slower by at least 100 ms and 30 percent since the last timing is matched to every update logged in between, and the email subject names it. With more than one update, **Confirm it** per update shows which one adds the time.
+- **Confirm it.** Loads the page twice from the server, back to back: once as usual, once without the plugin. The second request carries a single-use token, which a must-use file reads to leave that one plugin out. The verdict is `confirmed` (the plugin explains at least half of the slowdown), `partly`, `not` or `inconclusive` (the plugin was not left out, or the page fails without it). Nothing is deactivated.
+
+### What the must-use file does and does not do
+
+It is written only when you turn **Confirm it** on in the settings (or run `wp axle-runtime-doctor settings --confirm=on`), and removed when you turn it off, when the plugin is deactivated (the setting goes off too) and when it is deleted. It is called `axle-runtime-doctor-confirm.php` in the must-use plugins folder, and the plugin never overwrites a file of that name that is not its own.
+
+It does nothing unless the request is a GET on the front end and carries a 40 character token in the `X-Axle-Runtime-Doctor-Probe` header that matches a row this plugin wrote less than 60 seconds ago. The row is deleted as the request starts, so a token works once. No token, a wrong token, a used or expired token, a row that cannot be read: every plugin loads. It never leaves out Runtime Doctor itself. Visitors cannot get a token: only an administrator's action, WP-CLI or an ability makes one, and only for one request.
+
 ## Checks
 
 | ID | Group | Critical when | Recommended when |
@@ -141,6 +156,19 @@ Every threshold can be changed on the Settings tab or with `axle_runtime_doctor_
 | `axle_runtime_doctor_direct_request_url` | `( string $url, string $origin )`. The address direct mode calls, for sites that reach each other another way |
 | `axle_runtime_doctor_direct_timeout` | `( int $seconds )`. How long to wait for the other site. Default 30. 5 to 120 |
 | `axle_runtime_doctor_autoload_protected` | `( bool $protected, string $name )`. Options Runtime Doctor will not turn autoload off for. Default true for the options WordPress creates |
+| `axle_runtime_doctor_timing_enabled` | `( bool $on )`. Whether pages are timed daily and after updates. Default the setting, on |
+| `axle_runtime_doctor_timing_urls` | `( string[] $urls )`. The pages that are timed. Only pages of this site are used |
+| `axle_runtime_doctor_timing_page_count` | `( int $count )`. How many pages. Default 3, 1 to 6 |
+| `axle_runtime_doctor_timing_samples` | `( int $samples )`. Timed requests per page after the warm-up. Default 5, 1 to 11 |
+| `axle_runtime_doctor_timing_delay` | `( int $seconds, string $source )`. Wait after an update before timing. Default 45 |
+| `axle_runtime_doctor_timing_min_gap` | `( int $seconds )`. Least time between two timings started by Smoke Test. Default 300 |
+| `axle_runtime_doctor_timings_to_keep` | `( int $keep )`. Timing runs kept. Default 60 |
+| `axle_runtime_doctor_updates_to_keep` | `( int $keep )`. Updates kept in the log. Default 100 |
+| `axle_runtime_doctor_update_event` | `( array $event )`. An update before it is logged. Return an empty value to leave it out |
+| `axle_runtime_doctor_slowdown_message` | `( array $email, array $slowdowns, array $run )`. The email sent when a page got slower |
+| `axle_runtime_doctor_confirm_capability` | `( string $capability )`. On top of the screen's capability. Default `activate_plugins` |
+| `axle_runtime_doctor_confirm_blocked` | `( string[] $files )`. Plugin files that can never be left out |
+| `axle_runtime_doctor_confirm_limits` | `( array $limits )`. `confirm` (share of the slowdown the plugin must explain, 0.5), `clear` (0.2) and `min_ms` (30) |
 
 ### Actions
 
@@ -164,6 +192,16 @@ Every threshold can be changed on the Settings tab or with `axle_runtime_doctor_
 | `axle_runtime_doctor_page_cache_finished` | `( array $scan )`. After the test: `time` and `pages` (`url`, `status`, `via`, `answered`, `by`, `signals`, `blockers`, `cookies`, `trace`, `error`) |
 | `axle_runtime_doctor_probe_failed` | `( WP_Error $error, string $mode, string $url )`. A loopback probe failed |
 | `axle_runtime_doctor_settings_saved` | `( array $settings )`. After the settings are saved |
+| `axle_runtime_doctor_timing_queued` | `( string $source, int $delay )`. A timing run was queued after an update, a deploy or Smoke Test |
+| `axle_runtime_doctor_timing_started` | `( string $source )`. Before the pages are timed |
+| `axle_runtime_doctor_timing_finished` | `( array $run )`. After the run is stored |
+| `axle_runtime_doctor_slowdown_detected` | `( array $row, array $run )`. A page got slower. `$row` has `label`, `before`, `after`, `delta`, `percent`, `updates` and `summary` |
+| `axle_runtime_doctor_slowdown_alert_sent` | `( string[] $recipients, array $slowdowns, bool $sent )`. After the slowdown email |
+| `axle_runtime_doctor_update_recorded` | `( array $event )`. An update was logged |
+| `axle_runtime_doctor_confirm_started` | `( array $event, string $url )`. Before a page is loaded without a plugin |
+| `axle_runtime_doctor_confirmed` | `( array $result, array $event )`. After it, with the two times and the verdict |
+| `axle_runtime_doctor_confirm_loader_installed` | `( string $path )`. The must-use file was written |
+| `axle_runtime_doctor_confirm_loader_removed` | `(  )`. The must-use file was removed |
 
 ### JavaScript hooks
 
@@ -216,6 +254,9 @@ On WordPress 6.9 and later, Runtime Doctor registers [abilities](https://develop
 | `axle-runtime-doctor/enable-autoload` | Writes, not destructive, idempotent. `options`: turns autoload back on, to undo the one above. Axle Read-Only Mode refuses it during a freeze |
 
 Run them over REST with `GET .../run-checks/run?input[group]=opcache` and `POST .../disable-autoload/run` with `{ "input": { "options": [ "my_big_option" ] } }`.
+| `axle-runtime-doctor/get-timings` | Read-only. Timing runs, the pages that got slower in the latest one, and the updates logged |
+| `axle-runtime-doctor/run-timing` | Not read-only. Times the key pages now and stores the run |
+| `axle-runtime-doctor/confirm-update` | Not read-only, not destructive. `update` (an ID from `get-timings`), `url`. Loads a page with and without that plugin and returns both times. Needs the opt-in loader and `activate_plugins` |
 
 ## WP-CLI
 
@@ -223,6 +264,9 @@ Run them over REST with `GET .../run-checks/run?input[group]=opcache` and `POST 
 wp axle-runtime-doctor check [<check-id>...] [--group=<group>] [--status=<statuses>] [--fields=<fields>] [--format=<format>]
 wp axle-runtime-doctor report [--status=<statuses>] [--format=<format>]
 wp axle-runtime-doctor history [--format=<format>]
+wp axle-runtime-doctor timing [run|list] [--format=<format>]
+wp axle-runtime-doctor updates [--format=<format>]
+wp axle-runtime-doctor confirm <update-id> [--url=<url>] [--format=<format>]
 wp axle-runtime-doctor slow-queries [--limit=<n>] [--format=<format>]
 wp axle-runtime-doctor page-cache [--stored] [--fields=<fields>] [--format=<format>]
 wp axle-runtime-doctor fix <check-id> [--host=<host>] [--format=text|json]
@@ -235,7 +279,7 @@ wp axle-runtime-doctor remove-import <id>
 wp axle-runtime-doctor direct-code
 wp axle-runtime-doctor fetch <code> [--name=<name>]
 wp axle-runtime-doctor hosts [--all] [--format=<format>]
-wp axle-runtime-doctor settings [--host=<host>] [--sampling=on|off] [--sample-rate=<n>] [--patch-check=on|off] [--recipients=<emails>]
+wp axle-runtime-doctor settings [--host=<host>] [--sampling=on|off] [--sample-rate=<n>] [--patch-check=on|off] [--timing=on|off] [--confirm=on|off] [--recipients=<emails>]
 ```
 
 `check` runs through the web server and exits with 1 when a check is critical. A full run (no IDs, no group) is stored as a snapshot.
@@ -256,6 +300,11 @@ wp axle-runtime-doctor settings [--host=<host>] [--sampling=on|off] [--sample-ra
 | `axle_runtime_doctor_notice` | The open regression notice |
 | `axle_runtime_doctor_imports` | Reports kept from other sites: name, date, how they came, and the clean report. Up to 10 |
 | `axle_runtime_doctor_page_cache` | The last page cache test: per page the verdict of the headers, cookie names (never values), what stops a cache and the trace. Per site on multisite |
+| `axle_runtime_doctor_updates` | The last 100 updates (plugins, themes, core, deploys): name, versions before and after, time |
+| `axle_runtime_doctor_timings` | The last 60 timing runs: per page the median, the samples, the status, and the updates in between |
+| `axle_runtime_doctor_confirmations` | The last result of Confirm it for each update, up to 50 |
+| `axle_runtime_doctor_probe_*` | Single-use probe tokens (stored hashed, 60 seconds) and, for Confirm it, the one-time row the must-use file reads. Deleted when used, and by the daily clean-up |
+| `wp-content/mu-plugins/axle-runtime-doctor-confirm.php` | Only while Confirm it is on. Removed when it is turned off, on deactivation and on uninstall |
 | `axle_runtime_doctor_import_trash` | The report removed last, for 15 minutes, so Undo works |
 | user meta `axle_runtime_doctor_flash`, `axle_runtime_doctor_compare_state`, `axle_runtime_doctor_cache_flash`, `axle_runtime_doctor_cache_state` | The notice an action leaves for the next page view, and whether the user hid or finished the Get started card |
 | `axle_runtime_doctor_probe_*` | Probe tokens and one-time codes (hashed, single use, 60 seconds for probes, 10 minutes for codes) and probe output, removed after use and once a day |
@@ -265,4 +314,4 @@ All are options with autoload off, network options on multisite. Probe tokens ar
 
 ## Privacy
 
-Nothing about visitors is stored. The page cache test requests your own pages with no cookies and keeps the names of the cookies they set, never the values. Samples hold counts and memory use only, and query shapes have every value taken out. The only personal data is an alert recipient's email address; the privacy exporter lists it and the eraser removes it. Exported reports have paths, hostnames, email addresses and IP addresses replaced. Direct mode makes one request to the address in a code an administrator pasted, and nothing else leaves the site.
+Nothing about visitors is stored. Timing requests are made by the server to its own pages, with no cookies. The page cache test requests your own pages with no cookies and keeps the names of the cookies they set, never the values. Samples hold counts and memory use only, and query shapes have every value taken out. The only personal data is an alert recipient's email address; the privacy exporter lists it and the eraser removes it. Exported reports have paths, hostnames, email addresses and IP addresses replaced. Direct mode makes one request to the address in a code an administrator pasted, and nothing else leaves the site.

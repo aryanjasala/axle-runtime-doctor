@@ -4,7 +4,7 @@ const { spawnSync } = require( 'child_process' );
 const { COMPOSE_DIR } = require( './utils/config' );
 const { wp, wpEval } = require( './utils/wp-cli' );
 
-const OPTIONS = [ 'axle_runtime_doctor_settings', 'axle_runtime_doctor_snapshots', 'axle_runtime_doctor_report', 'axle_runtime_doctor_samples', 'axle_runtime_doctor_notice', 'axle_runtime_doctor_imports', 'ard_e2e_mail', 'ard_e2e_loopback', 'ard_e2e_direct', 'ard_e2e_cache', 'axle_runtime_doctor_page_cache' ];
+const OPTIONS = [ 'axle_runtime_doctor_settings', 'axle_runtime_doctor_snapshots', 'axle_runtime_doctor_report', 'axle_runtime_doctor_samples', 'axle_runtime_doctor_notice', 'axle_runtime_doctor_imports', 'ard_e2e_mail', 'ard_e2e_loopback', 'ard_e2e_direct', 'ard_e2e_cache', 'axle_runtime_doctor_page_cache', 'axle_runtime_doctor_updates', 'axle_runtime_doctor_timings', 'axle_runtime_doctor_confirmations', 'axle_runtime_doctor_timing_lock', 'ard_e2e_slow_ms', 'ard_e2e_timing_pages' ];
 const FIXTURES = '/var/www/html/wp-content/plugins/axle-runtime-doctor/tests/e2e/fixtures';
 
 /**
@@ -69,6 +69,74 @@ function installFixture() {
 	return '';
 }
 
+/**
+ * Installs and activates the slow fixture plugin (a plugin that sleeps on init and marks the footer).
+ * Its version goes back to 1.0.0 each time.
+ */
+function installSlowPlugin() {
+	wpEval( `wp_mkdir_p( WP_PLUGIN_DIR . '/ard-slow-plugin' ); copy( WP_PLUGIN_DIR . '/axle-runtime-doctor/tests/e2e/fixtures/ard-slow-plugin.php', WP_PLUGIN_DIR . '/ard-slow-plugin/ard-slow-plugin.php' );` );
+	wpRun( 'plugin', 'activate', 'ard-slow-plugin' );
+}
+
+/** Removes the slow fixture plugin. */
+function removeSlowPlugin() {
+	wpRun( 'plugin', 'deactivate', 'ard-slow-plugin' );
+	wpEval( `@unlink( WP_PLUGIN_DIR . '/ard-slow-plugin/ard-slow-plugin.php' ); @rmdir( WP_PLUGIN_DIR . '/ard-slow-plugin' );` );
+}
+
+/** Whether the must-use loader of "Confirm it" is in place. */
+function loaderInstalled() {
+	return '1' === wpEval( "echo file_exists( WPMU_PLUGIN_DIR . '/axle-runtime-doctor-confirm.php' ) ? 1 : 0;" );
+}
+
+/**
+ * Simulates a plugin update the way core reports it: the version in the file changes
+ * between upgrader_pre_install and upgrader_process_complete.
+ *
+ * @param {string} file Plugin file.
+ * @param {string} from Version before.
+ * @param {string} to   Version after.
+ */
+function simulateUpdate( file = 'ard-slow-plugin/ard-slow-plugin.php', from = '1.0.0', to = '1.1.0' ) {
+	wpEval( `
+		require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
+		$file = ${ JSON.stringify( file ) };
+		apply_filters( 'upgrader_pre_install', true, array( 'plugin' => $file ) );
+		$path = WP_PLUGIN_DIR . '/' . $file;
+		file_put_contents( $path, str_replace( 'Version: ${ from }', 'Version: ${ to }', file_get_contents( $path ) ) );
+		do_action( 'upgrader_process_complete', null, array( 'action' => 'update', 'type' => 'plugin', 'plugins' => array( $file ) ) );
+	` );
+	return '';
+}
+
+/**
+ * A site where an update made the home page slower: a first timing, a plugin that
+ * got slow in a new version, and the timing that ran after the update.
+ * "Confirm it" is on and the alert email goes to ops@example.com.
+ */
+function seedSlowdown() {
+	reset();
+	installFixture();
+	installSlowPlugin();
+	wp( 'option', 'update', 'ard_e2e_slow_ms', '0' );
+	wp( 'axle-runtime-doctor', 'settings', '--recipients=ops@example.com', '--confirm=on' );
+	wp( 'axle-runtime-doctor', 'timing', 'run' );
+	wp( 'option', 'update', 'ard_e2e_slow_ms', '450' );
+	simulateUpdate();
+	wp( 'cron', 'event', 'run', 'axle_runtime_doctor_timing_run' );
+	// The run above is the queued one: drop what is left, so WP-Cron does not time the pages again during a test.
+	wpRun( 'cron', 'event', 'delete', 'axle_runtime_doctor_timing_run' );
+	return '';
+}
+
+/** Undoes seedSlowdown. */
+function cleanupSlowdown() {
+	wpRun( 'axle-runtime-doctor', 'settings', '--confirm=off' );
+	removeSlowPlugin();
+	reset();
+	return '';
+}
+
 /** Deletes the plugin's options and the fixture's, and what the Compare tab keeps for the admin. */
 function reset() {
 	for ( const option of OPTIONS ) {
@@ -76,7 +144,7 @@ function reset() {
 	}
 	wpRun( 'transient', 'delete', 'axle_runtime_doctor_import_trash', '--network' );
 	wpRun( 'transient', 'delete', 'axle_runtime_doctor_import_trash' );
-	for ( const key of [ 'axle_runtime_doctor_flash', 'axle_runtime_doctor_compare_state', 'axle_runtime_doctor_cache_flash', 'axle_runtime_doctor_cache_state' ] ) {
+	for ( const key of [ 'axle_runtime_doctor_flash', 'axle_runtime_doctor_compare_state', 'axle_runtime_doctor_cache_flash', 'axle_runtime_doctor_cache_state', 'axle_runtime_doctor_timeline_flash' ] ) {
 		wpRun( 'user', 'meta', 'delete', '1', key );
 	}
 }
@@ -191,4 +259,4 @@ function seedPageCache( kind ) {
 	return '';
 }
 
-module.exports = { seedPageCache, wpRun, webRoot, reloadPhp, blacklistWpContent, unblacklist, installFixture, reset, report, runChecks, wpOlderThan, bigMenu, deleteBigMenu, OPTIONS };
+module.exports = { seedPageCache, wpRun, webRoot, reloadPhp, blacklistWpContent, unblacklist, installFixture, installSlowPlugin, removeSlowPlugin, loaderInstalled, simulateUpdate, seedSlowdown, cleanupSlowdown, reset, report, runChecks, wpOlderThan, bigMenu, deleteBigMenu, OPTIONS };

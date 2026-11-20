@@ -133,7 +133,9 @@ test.describe( 'Page cache', () => {
 		await runTest( page );
 
 		await expect( page.locator( '.ard-cache-pages' ) ).toContainText( 'The constant DONOTCACHEPAGE is defined on the page' );
-		await expect( page.locator( '.ard-cache-details' ) ).toContainText( 'The constant DONOTCACHEPAGE' );
+		// The blocker is in the table row only; "What we found" does not repeat it.
+		await expect( page.locator( '.ard-cache-details' ) ).not.toContainText( 'The constant DONOTCACHEPAGE is defined on the page' );
+		await expect( page.locator( '.ard-cache-details' ) ).toContainText( 'Seen: the constant DONOTCACHEPAGE' );
 		const stored = scan();
 		expect( stored.pages[ 0 ].blockers.some( ( blocker ) => 'nocache' === blocker.type ) ).toBe( true );
 		expect( stored.pages[ 0 ].cookies ).toEqual( [] );

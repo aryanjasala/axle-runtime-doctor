@@ -11,11 +11,17 @@ use AryanX\Axle\RuntimeDoctor\Admin\ComparePanel;
 use AryanX\Axle\RuntimeDoctor\Admin\Notice;
 use AryanX\Axle\RuntimeDoctor\Admin\Page;
 use AryanX\Axle\RuntimeDoctor\Admin\PageCachePanel;
+use AryanX\Axle\RuntimeDoctor\Admin\TimelinePanel;
 use AryanX\Axle\RuntimeDoctor\Checks\Registry;
 use AryanX\Axle\RuntimeDoctor\Cli\Command;
 use AryanX\Axle\RuntimeDoctor\Compare\Direct;
 use AryanX\Axle\RuntimeDoctor\Compare\Library;
 use AryanX\Axle\RuntimeDoctor\Health\SiteHealth;
+use AryanX\Axle\RuntimeDoctor\Timing\Confirm;
+use AryanX\Axle\RuntimeDoctor\Timing\Loader;
+use AryanX\Axle\RuntimeDoctor\Timing\TimingAbilities;
+use AryanX\Axle\RuntimeDoctor\Timing\Timings;
+use AryanX\Axle\RuntimeDoctor\Timing\Updates;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -95,6 +101,13 @@ final class Plugin {
 	private Runner $runner;
 
 	/**
+	 * Times the key pages.
+	 *
+	 * @var Timings
+	 */
+	private Timings $timings;
+
+	/**
 	 * Reports kept for comparing.
 	 *
 	 * @var Library
@@ -134,6 +147,7 @@ final class Plugin {
 		$this->alerts   = new Alerts( $this->settings );
 		$this->history  = new History( $this->alerts );
 		$this->library  = new Library();
+		$this->timings  = new Timings( $this->settings, $this->alerts );
 		$this->runner   = new Runner( $this->settings, $this->registry, $this->hosts, $this->sampler, $this->autoload, new PhpReleases(), $this->history );
 	}
 
@@ -144,6 +158,15 @@ final class Plugin {
 	 */
 	public function runner(): Runner {
 		return $this->runner;
+	}
+
+	/**
+	 * Times the key pages, for other plugins and tests.
+	 *
+	 * @return Timings
+	 */
+	public function timings(): Timings {
+		return $this->timings;
 	}
 
 	/**
@@ -182,14 +205,21 @@ final class Plugin {
 
 		$compare  = new ComparePanel( $this->history, $this->library );
 		$cache    = new PageCachePanel( $this->fixes, $this->hosts );
+		$confirm  = new Confirm( $this->settings );
+		$timeline = new TimelinePanel( $this->timings, $confirm, $this->settings );
 		$services = array(
 			new Probe(),
 			$this->sampler,
 			new Rest( $this->runner, $this->history ),
-			new Scheduler( $this->runner ),
-			new Page( $this->settings, $this->runner, $this->history, $this->fixes, $this->hosts, $this->autoload, $this->alerts, $this->registry, $compare, $cache ),
+			new Scheduler( $this->runner, $this->timings ),
+			new Page( $this->settings, $this->runner, $this->history, $this->fixes, $this->hosts, $this->autoload, $this->alerts, $this->registry, $compare, $cache, $timeline ),
 			$compare,
 			$cache,
+			$timeline,
+			$this->timings,
+			new Updates( $this->timings ),
+			new Loader( $this->settings ),
+			new TimingAbilities( $this->timings, $confirm ),
 			new Direct( $this->runner, $this->history ),
 			new Notice( $this->alerts ),
 			new SiteHealth( $this->runner, $this->history, $this->registry ),
@@ -202,7 +232,7 @@ final class Plugin {
 		}
 
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
-			\WP_CLI::add_command( 'axle-runtime-doctor', new Command( $this->settings, $this->runner, $this->history, $this->fixes, $this->hosts, $this->autoload, $this->registry, $this->library ) );
+			\WP_CLI::add_command( 'axle-runtime-doctor', new Command( $this->settings, $this->runner, $this->history, $this->fixes, $this->hosts, $this->autoload, $this->registry, $this->library, $this->timings, $confirm ) );
 		}
 	}
 }

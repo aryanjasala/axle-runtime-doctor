@@ -39,3 +39,4 @@ spl_autoload_register(
 
 add_action( 'plugins_loaded', array( Plugin::class, 'boot' ) );
 register_deactivation_hook( __FILE__, array( Scheduler::class, 'unschedule' ) );
+register_deactivation_hook( __FILE__, array( Timing\Loader::class, 'on_deactivate' ) );

@@ -48,13 +48,16 @@ test.describe.serial( 'Screenshots', () => {
 	} );
 
 	test( '3: history, with the day OPcache stopped caching wp-content', async ( { page } ) => {
-		await page.goto( `${ PAGE }&tab=history` );
+		await page.goto( `${ PAGE }&tab=compare&view=day` );
 		await expect( page.locator( '.ard-history-checks tr.ard-regressed' ) ).toHaveCount( 1 );
 		await shot( page, 3 );
 	} );
 
 	test( '4: slow queries on the key pages', async ( { page } ) => {
-		await page.goto( `${ PAGE }&tab=slow-queries` );
+		await page.goto( PAGE );
+		await page.locator( '#ard-check-db_slow_queries .ard-slow-details summary' ).click();
+		await page.evaluate( () => document.querySelector( '#ard-check-db_slow_queries' ).scrollIntoView( { block: 'start' } ) );
+		await page.evaluate( () => window.scrollBy( 0, -60 ) );
 		await expect( page.locator( '.ard-slow tbody tr' ).first() ).toBeVisible();
 		await shot( page, 4 );
 	} );
@@ -66,5 +69,14 @@ test.describe.serial( 'Screenshots', () => {
 		await page.evaluate( () => document.querySelector( '#ard-cache-run' ).scrollIntoView( { block: 'start' } ) );
 		await page.evaluate( () => window.scrollBy( 0, -60 ) );
 		await shot( page, 5 );
+	} );
+
+	test( '6: which update made the site slower, with Confirm it', async ( { page } ) => {
+		h.seedSlowdown();
+		await page.goto( `${ PAGE }&tab=compare&view=day` );
+		await page.locator( '.ard-slowdown' ).getByRole( 'button', { name: /Confirm it/ } ).click();
+		await expect( page.locator( '.ard-confirm-result--confirmed' ).first() ).toBeVisible();
+		await shot( page, 6 );
+		h.cleanupSlowdown();
 	} );
 } );

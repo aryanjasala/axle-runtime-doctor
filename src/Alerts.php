@@ -96,6 +96,94 @@ final class Alerts {
 	}
 
 	/**
+	 * Raises the notice and emails the recipients when a page got slower, with
+	 * the updates made since the last timing in the subject and the text.
+	 *
+	 * @param array[] $slowdowns key, label, before, after, delta, percent, updates, summary.
+	 * @param array   $run       The timing run.
+	 */
+	public function send_slowdown( array $slowdowns, array $run ): void {
+		if ( ! $slowdowns ) {
+			return;
+		}
+
+		// Add to what is open, so a slowdown does not hide a check that got worse.
+		$open = Store::get( self::NOTICE );
+		$rows = is_array( $open ) && ! empty( $open['regressions'] ) ? (array) $open['regressions'] : array();
+		foreach ( $slowdowns as $slowdown ) {
+			$id     = 'timing:' . $slowdown['key'];
+			$rows   = array_values(
+				array_filter(
+					$rows,
+					static function ( $row ) use ( $id ) {
+						return ( $row['id'] ?? '' ) !== $id;
+					}
+				)
+			);
+			$rows[] = array(
+				'id'      => $id,
+				'label'   => (string) $slowdown['label'],
+				'before'  => Result::GOOD,
+				'after'   => (float) $slowdown['percent'] >= 100 ? Result::CRITICAL : Result::RECOMMENDED,
+				'summary' => (string) $slowdown['summary'],
+			);
+		}
+		Store::set(
+			self::NOTICE,
+			array(
+				'time'        => (int) ( $run['time'] ?? time() ),
+				'regressions' => $rows,
+			)
+		);
+
+		$recipients = $this->settings->recipients();
+		if ( ! $recipients ) {
+			return;
+		}
+
+		$site  = wp_specialchars_decode( (string) get_option( 'blogname' ), ENT_QUOTES );
+		$lines = array();
+		foreach ( $slowdowns as $slowdown ) {
+			$lines[] = '- ' . $slowdown['summary'];
+		}
+		$email = array(
+			/* translators: 1: site name, 2: what happened, naming the update. */
+			'subject' => sprintf( __( '[%1$s] A page got slower: %2$s', 'axle-runtime-doctor' ), $site, $slowdowns[0]['summary'] ),
+			'message' => sprintf(
+				/* translators: 1: site address, 2: list of slowdowns, 3: screen address. */
+				__( "The latest timing of %1\$s found pages that got slower:\n\n%2\$s\n\nSee the timeline, and load the page without a plugin to confirm which one it is:\n%3\$s\n", 'axle-runtime-doctor' ),
+				home_url( '/' ),
+				implode( "\n", $lines ),
+				Admin\Page::url( 'compare' )
+			),
+		);
+
+		/**
+		 * Filters the email sent when a page got slower.
+		 *
+		 * @param array $email     subject, message.
+		 * @param array $slowdowns What got slower, with the updates in between.
+		 * @param array $run       The timing run.
+		 */
+		$filtered = (array) apply_filters( 'axle_runtime_doctor_slowdown_message', $email, $slowdowns, $run );
+		if ( isset( $filtered['subject'], $filtered['message'] ) ) {
+			$email = $filtered;
+		}
+
+		// phpcs:ignore WordPressVIPMinimum.Functions.RestrictedFunctions.wp_mail_wp_mail -- A few admins, only when a page got slower.
+		$sent = wp_mail( $recipients, (string) $email['subject'], (string) $email['message'] );
+
+		/**
+		 * Fires after the slowdown email went out.
+		 *
+		 * @param string[] $recipients Who got it.
+		 * @param array    $slowdowns  What got slower.
+		 * @param bool     $sent       Whether wp_mail() succeeded.
+		 */
+		do_action( 'axle_runtime_doctor_slowdown_alert_sent', $recipients, $slowdowns, (bool) $sent );
+	}
+
+	/**
 	 * The open notice.
 	 *
 	 * @return array|null time, regressions.

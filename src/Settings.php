@@ -36,6 +36,8 @@ final class Settings {
 			'patch_check' => false,
 			'recipients'  => '',
 			'thresholds'  => array(),
+			'timing'      => true,
+			'confirm'     => false,
 		);
 	}
 
@@ -58,6 +60,8 @@ final class Settings {
 			'eol_warning_days'    => 183.0,
 			'bootstrap_ms'        => 300.0,
 			'object_hit_rate'     => 80.0,
+			'timing_ms'           => 100.0,
+			'timing_pct'          => 30.0,
 		);
 	}
 
@@ -125,6 +129,11 @@ final class Settings {
 		if ( isset( $input['patch_check'] ) ) {
 			$settings['patch_check'] = (bool) $input['patch_check'];
 		}
+		foreach ( array( 'timing', 'confirm' ) as $flag ) {
+			if ( isset( $input[ $flag ] ) ) {
+				$settings[ $flag ] = (bool) $input[ $flag ];
+			}
+		}
 		if ( isset( $input['recipients'] ) ) {
 			$settings['recipients'] = implode( ', ', self::emails( (string) $input['recipients'] ) );
 		}
@@ -169,7 +178,7 @@ final class Settings {
 		 *
 		 * @param array $thresholds opcache_memory_pct, opcache_strings_pct, opcache_keys_pct, opcache_hit_rate,
 		 *                          autoload_single_kb, cron_late_minutes, loopback_ms, disk_free_mb,
-		 *                          eol_warning_days, bootstrap_ms, object_hit_rate.
+		 *                          eol_warning_days, bootstrap_ms, object_hit_rate, timing_ms, timing_pct.
 		 */
 		$filtered = (array) apply_filters( 'axle_runtime_doctor_thresholds', $merged );
 

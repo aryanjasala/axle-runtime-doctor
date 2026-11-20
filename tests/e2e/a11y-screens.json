@@ -118,7 +118,7 @@
 			]
 		},
 		{
-			"name": "Runtime Doctor, history before any run",
+			"name": "Compare, with another day, nothing timed or stored yet",
 			"setup": [
 				{
 					"js": "helpers.js",
@@ -129,7 +129,7 @@
 					"call": "reset"
 				}
 			],
-			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=history",
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare&view=day",
 			"steps": [
 				{
 					"waitFor": ".ard-empty"
@@ -137,7 +137,7 @@
 			]
 		},
 		{
-			"name": "Runtime Doctor, history with a regression",
+			"name": "Compare, with another day, a check got worse",
 			"setup": [
 				{
 					"js": "helpers.js",
@@ -159,7 +159,7 @@
 					"$s = get_option( 'axle_runtime_doctor_snapshots' ); $first = $s[0]; $first['time'] -= DAY_IN_SECONDS; $first['results']['fs_config']['status'] = 'good'; $first['regressions'] = array(); $s[0]['regressions'] = array( 'fs_config' ); update_option( 'axle_runtime_doctor_snapshots', array( $first, $s[0] ), false );"
 				]
 			],
-			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=history",
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare&view=day",
 			"steps": [
 				{
 					"waitFor": ".ard-history-checks tr.ard-regressed"
@@ -169,6 +169,107 @@
 				{
 					"js": "helpers.js",
 					"call": "reset"
+				}
+			]
+		},
+		{
+			"name": "Compare, with another day, a page got slower after an update",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "seedSlowdown"
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare&view=day",
+			"steps": [
+				{
+					"waitFor": ".ard-slowdown"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "cleanupSlowdown"
+				}
+			]
+		},
+		{
+			"name": "Compare, with another day, Confirm it result",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "seedSlowdown"
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare&view=day",
+			"steps": [
+				{
+					"click": ".ard-slowdown .ard-inline-form button"
+				},
+				{
+					"waitFor": ".ard-notice"
+				},
+				{
+					"waitFor": ".ard-confirm-result"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "cleanupSlowdown"
+				}
+			]
+		},
+		{
+			"name": "Compare, with another day, Confirm it is off",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "seedSlowdown"
+				},
+				{
+					"wp": [
+						"axle-runtime-doctor",
+						"settings",
+						"--confirm=off"
+					]
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare&view=day",
+			"steps": [
+				{
+					"waitFor": ".ard-slowdown a[href*='ard-confirm']"
+				}
+			],
+			"cleanup": [
+				{
+					"js": "helpers.js",
+					"call": "cleanupSlowdown"
+				}
+			]
+		},
+		{
+			"name": "Compare, with another day, help tab open",
+			"setup": [
+				{
+					"js": "helpers.js",
+					"call": "installFixture"
+				},
+				{
+					"js": "helpers.js",
+					"call": "reset"
+				}
+			],
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare&view=day",
+			"include": [
+				"#contextual-help-wrap"
+			],
+			"steps": [
+				{
+					"click": "#contextual-help-link"
+				},
+				{
+					"waitFor": "#contextual-help-wrap:not([hidden])"
 				}
 			]
 		},
@@ -184,7 +285,7 @@
 					"call": "reset"
 				}
 			],
-			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare",
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare&view=site",
 			"steps": [
 				{
 					"waitFor": ".ard-started"
@@ -216,7 +317,7 @@
 					"mayFail": true
 				}
 			],
-			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare",
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare&view=site",
 			"steps": [
 				{
 					"waitFor": "#ard-compare .axle-empty"
@@ -252,7 +353,7 @@
 					"$r = AryanX\\Axle\\RuntimeDoctor\\Compare\\Exporter::build( get_option( 'axle_runtime_doctor_report' ) ); $r['results']['opcache_coverage']['status'] = 'critical'; $r['results']['opcache_coverage']['summary'] = 'OPcache is skipping wp-content'; $r['settings']['opcache.max_accelerated_files']['value'] = '2000'; AryanX\\Axle\\RuntimeDoctor\\Plugin::instance()->library()->add( AryanX\\Axle\\RuntimeDoctor\\Compare\\Importer::parse( wp_json_encode( $r ) ), 'Production', 'paste' );"
 				]
 			],
-			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare#ard-compare",
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare&view=site#ard-compare",
 			"steps": [
 				{
 					"waitFor": ".ard-compare"
@@ -291,7 +392,7 @@
 					"$r = AryanX\\Axle\\RuntimeDoctor\\Compare\\Exporter::build( get_option( 'axle_runtime_doctor_report' ) ); $r['results']['opcache_coverage']['status'] = 'critical'; $r['results']['opcache_coverage']['summary'] = 'OPcache is skipping wp-content'; $r['settings']['opcache.max_accelerated_files']['value'] = '2000'; AryanX\\Axle\\RuntimeDoctor\\Plugin::instance()->library()->add( AryanX\\Axle\\RuntimeDoctor\\Compare\\Importer::parse( wp_json_encode( $r ) ), 'Production', 'paste' );"
 				]
 			],
-			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare",
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare&view=site",
 			"steps": [
 				{
 					"waitFor": "[data-ard-confirm]"
@@ -333,7 +434,7 @@
 					"update_user_meta( 1, 'axle_runtime_doctor_flash', array( 'type' => 'error', 'text' => 'That is not valid JSON. Export the report again on the other site and paste the whole file.' ) );"
 				]
 			],
-			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare",
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare&view=site",
 			"steps": [
 				{
 					"waitFor": ".notice-error"
@@ -369,7 +470,7 @@
 					"update_user_meta( 1, 'axle_runtime_doctor_flash', array( 'type' => 'success', 'text' => 'Removed the report \"Production\".', 'undo' => 'restore' ) );"
 				]
 			],
-			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare",
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare&view=site",
 			"steps": [
 				{
 					"waitFor": ".notice-success"
@@ -405,7 +506,7 @@
 					"update_user_meta( 1, 'axle_runtime_doctor_flash', array( 'type' => 'success', 'text' => 'The code is ready. It works once.', 'code' => 'ard1.eyJ1IjoiaHR0cHM6Ly9leGFtcGxlLmNvbSJ9.abcdef', 'expires' => time() + 600 ) );"
 				]
 			],
-			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare",
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare&view=site",
 			"steps": [
 				{
 					"waitFor": "#ard-code-made"
@@ -430,7 +531,7 @@
 					"call": "reset"
 				}
 			],
-			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare",
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=compare&view=site",
 			"include": [
 				"#contextual-help-wrap"
 			],
@@ -682,7 +783,7 @@
 			]
 		},
 		{
-			"name": "Runtime Doctor, slow queries",
+			"name": "Runtime Doctor, slow queries open in their check",
 			"setup": [
 				{
 					"js": "helpers.js",
@@ -700,8 +801,11 @@
 					"mayFail": true
 				}
 			],
-			"url": "/wp-admin/tools.php?page=axle-runtime-doctor&tab=slow-queries",
+			"url": "/wp-admin/tools.php?page=axle-runtime-doctor",
 			"steps": [
+				{
+					"click": "#ard-check-db_slow_queries .ard-slow-details summary"
+				},
 				{
 					"waitFor": ".ard-slow"
 				}

@@ -21,6 +21,9 @@ use AryanX\Axle\RuntimeDoctor\Hosts;
 use AryanX\Axle\RuntimeDoctor\Result;
 use AryanX\Axle\RuntimeDoctor\Runner;
 use AryanX\Axle\RuntimeDoctor\Settings;
+use AryanX\Axle\RuntimeDoctor\Timing\Confirm;
+use AryanX\Axle\RuntimeDoctor\Timing\Timings;
+use AryanX\Axle\RuntimeDoctor\Timing\Updates;
 use AryanX\Axle\RuntimeDoctor\Checks\PageCache;
 use AryanX\Axle\RuntimeDoctor\Checks\Registry;
 use WP_CLI;
@@ -105,6 +108,20 @@ final class Command {
 	private Library $library;
 
 	/**
+	 * Times the key pages.
+	 *
+	 * @var Timings
+	 */
+	private Timings $timings;
+
+	/**
+	 * Leaves a plugin out of one request.
+	 *
+	 * @var Confirm
+	 */
+	private Confirm $confirm;
+
+	/**
 	 * Sets up the command.
 	 *
 	 * @param Settings $settings Settings.
@@ -115,8 +132,10 @@ final class Command {
 	 * @param Autoload $autoload Autoloaded options.
 	 * @param Registry $registry The checks.
 	 * @param Library  $library  Kept reports from other sites.
+	 * @param Timings  $timings  Times the key pages.
+	 * @param Confirm  $confirm  Leaves a plugin out of one request.
 	 */
-	public function __construct( Settings $settings, Runner $runner, History $history, Fixes $fixes, Hosts $hosts, Autoload $autoload, Registry $registry, Library $library ) {
+	public function __construct( Settings $settings, Runner $runner, History $history, Fixes $fixes, Hosts $hosts, Autoload $autoload, Registry $registry, Library $library, Timings $timings, Confirm $confirm ) {
 		$this->settings = $settings;
 		$this->runner   = $runner;
 		$this->history  = $history;
@@ -125,6 +144,8 @@ final class Command {
 		$this->autoload = $autoload;
 		$this->registry = $registry;
 		$this->library  = $library;
+		$this->timings  = $timings;
+		$this->confirm  = $confirm;
 	}
 
 	/**
@@ -266,6 +287,148 @@ final class Command {
 	}
 
 	/**
+	 * Times the key pages from the server, or lists the timings kept.
+	 *
+	 * "run" loads each key page 6 times (one warm-up) with page caches left out, keeps the median of
+	 * the other 5, stores the run and matches a slowdown to the updates made since the last run.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [<what>]
+	 * : run or list. Default: list.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 * ---
+	 * default: table
+	 * options:
+	 *   - table
+	 *   - csv
+	 *   - json
+	 *   - yaml
+	 *   - count
+	 * ---
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp axle-runtime-doctor timing run
+	 *     wp axle-runtime-doctor timing list --format=json
+	 *
+	 * @param array $args       run or list.
+	 * @param array $assoc_args Options.
+	 */
+	public function timing( $args, $assoc_args ): void {
+		$what = (string) ( $args[0] ?? 'list' );
+		if ( ! in_array( $what, array( 'run', 'list' ), true ) ) {
+			WP_CLI::error( 'Use "run" or "list".' );
+		}
+
+		if ( 'run' === $what ) {
+			$run = $this->timings->run( 'cli' );
+			if ( is_wp_error( $run ) ) {
+				WP_CLI::error( $run->get_error_message() );
+			}
+			foreach ( (array) $run['regressions'] as $row ) {
+				WP_CLI::warning( (string) $row['summary'] );
+			}
+			WP_CLI::success( sprintf( 'Timed %d pages.', count( (array) $run['pages'] ) ) );
+		}
+
+		$rows = array();
+		foreach ( array_reverse( Timings::all() ) as $run ) {
+			foreach ( (array) $run['pages'] as $path => $page ) {
+				$rows[] = array(
+					'run'     => (string) $run['id'],
+					'time'    => gmdate( 'Y-m-d H:i:s', (int) $run['time'] ),
+					'source'  => (string) $run['source'],
+					'page'    => (string) $path,
+					'ms'      => (float) $page['median'],
+					'status'  => (int) $page['status'],
+					'slower'  => in_array( (string) $path, array_column( (array) ( $run['regressions'] ?? array() ), 'key' ), true ) ? 'yes' : 'no',
+					'updates' => implode( ',', (array) ( $run['updates'] ?? array() ) ),
+				);
+			}
+		}
+		Utils\format_items( (string) ( $assoc_args['format'] ?? 'table' ), $rows, array( 'run', 'time', 'source', 'page', 'ms', 'status', 'slower', 'updates' ) );
+	}
+
+	/**
+	 * Lists the updates logged: plugins, themes, core and deploys, newest first.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 * ---
+	 * default: table
+	 * options:
+	 *   - table
+	 *   - csv
+	 *   - json
+	 *   - yaml
+	 *   - count
+	 * ---
+	 *
+	 * @param array $args       Unused.
+	 * @param array $assoc_args Options.
+	 */
+	public function updates( $args, $assoc_args ): void {
+		unset( $args );
+		$rows = array();
+		foreach ( array_reverse( Updates::all() ) as $event ) {
+			$rows[] = array(
+				'id'      => (string) $event['id'],
+				'time'    => gmdate( 'Y-m-d H:i:s', (int) $event['time'] ),
+				'type'    => (string) $event['type'],
+				'name'    => (string) $event['name'],
+				'from'    => (string) $event['from'],
+				'to'      => (string) $event['to'],
+				'confirm' => Confirm::for_event( (string) $event['id'] )['verdict'] ?? '',
+			);
+		}
+		Utils\format_items( (string) ( $assoc_args['format'] ?? 'table' ), $rows, array( 'id', 'time', 'type', 'name', 'from', 'to', 'confirm' ) );
+	}
+
+	/**
+	 * Loads a page once without the plugin of one update and compares the server times ("Confirm it").
+	 *
+	 * Needs the opt-in loader: `wp axle-runtime-doctor settings --confirm=on`. The request that leaves the
+	 * plugin out carries a single-use token; nothing else on the site changes.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <update-id>
+	 * : An ID from `wp axle-runtime-doctor updates`.
+	 *
+	 * [--url=<url>]
+	 * : A page of this site. Default: the page that got slowest, or the home page.
+	 *
+	 * [--format=<format>]
+	 * : Output format.
+	 * ---
+	 * default: table
+	 * options:
+	 *   - table
+	 *   - json
+	 *   - yaml
+	 * ---
+	 *
+	 * @param array $args       Update ID.
+	 * @param array $assoc_args Options.
+	 */
+	public function confirm( $args, $assoc_args ): void {
+		$result = $this->confirm->run( (string) $args[0], (string) ( $assoc_args['url'] ?? '' ) );
+		if ( is_wp_error( $result ) ) {
+			WP_CLI::error( $result->get_error_message() );
+		}
+
+		if ( 'table' === (string) ( $assoc_args['format'] ?? 'table' ) ) {
+			WP_CLI::log( (string) $result['message'] );
+		}
+		Utils\format_items( (string) ( $assoc_args['format'] ?? 'table' ), array( $result ), array( 'plugin', 'label', 'with_ms', 'without_ms', 'saved_ms', 'verdict' ) );
+	}
+
+	/**
 	 * Lists the queries measured on the key pages in the latest run, slowest total first.
 	 *
 	 * ## OPTIONS
@@ -337,6 +500,10 @@ final class Command {
 	 * ## EXAMPLES
 	 *
 	 *     wp axle-runtime-doctor page-cache
+	 *     wp axle-runtime-doctor timing run
+	 *     wp axle-runtime-doctor timing list
+	 *     wp axle-runtime-doctor updates
+	 *     wp axle-runtime-doctor confirm 3f2a9c1b7d04
 	 *     wp axle-runtime-doctor page-cache --stored --format=json
 	 *
 	 * @subcommand page-cache
@@ -839,6 +1006,12 @@ final class Command {
 	 * [--patch-check=<on|off>]
 	 * : Compare PHP with php.net's latest releases.
 	 *
+	 * [--timing=<on|off>]
+	 * : Time the key pages every day and after each update.
+	 *
+	 * [--confirm=<on|off>]
+	 * : Allow "Confirm it": writes or removes the must-use loader that leaves one plugin out of one tokenized request.
+	 *
 	 * [--recipients=<emails>]
 	 * : Alert recipients, comma separated. Empty for the admin email.
 	 *
@@ -868,6 +1041,8 @@ final class Command {
 		foreach ( array(
 			'sampling'    => 'sampling',
 			'patch-check' => 'patch_check',
+			'timing'      => 'timing',
+			'confirm'     => 'confirm',
 		) as $flag => $key ) {
 			if ( isset( $assoc_args[ $flag ] ) ) {
 				$input[ $key ] = in_array( strtolower( (string) $assoc_args[ $flag ] ), array( 'on', '1', 'yes', 'true' ), true );
@@ -883,6 +1058,9 @@ final class Command {
 		$settings = $input ? $this->settings->save( $input ) : $this->settings->all();
 		if ( $input ) {
 			WP_CLI::success( 'Settings saved.' );
+			if ( ! empty( $input['confirm'] ) && ! $settings['confirm'] ) {
+				WP_CLI::warning( 'Confirm it stays off: the must-use plugins folder is not writable, or a file of another name is in the way.' );
+			}
 		}
 		$rows = array();
 		foreach ( $settings as $key => $value ) {

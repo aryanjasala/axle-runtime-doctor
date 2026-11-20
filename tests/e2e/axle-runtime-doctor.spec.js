@@ -176,7 +176,7 @@ test.describe( 'Axle Runtime Doctor', () => {
 		await page.getByRole( 'button', { name: 'Help' } ).click();
 		await expect( page.locator( '#tab-link-axle-runtime-doctor-overview' ) ).toBeVisible();
 		await expect( page.locator( '#tab-panel-axle-runtime-doctor-overview' ) ).toContainText( 'from inside a real web request' );
-		await page.goto( `${ PAGE }&tab=compare` );
+		await page.goto( `${ PAGE }&tab=compare&view=site` );
 		await page.getByRole( 'button', { name: 'Help' } ).click();
 		await expect( page.locator( '#tab-link-axle-runtime-doctor-compare-read' ) ).toBeVisible();
 
@@ -219,7 +219,7 @@ test.describe( 'Axle Runtime Doctor', () => {
 		const notice = page.locator( '.axle-runtime-doctor-notice' );
 		await expect( notice ).toContainText( 'wp-config.php permissions: Good to Recommended.' );
 
-		await page.goto( `${ PAGE }&tab=history` );
+		await page.goto( `${ PAGE }&tab=compare&view=day` );
 		await expect( page.locator( '.ard-history-checks tr.ard-regressed[data-check="fs_config"]' ) ).toContainText( 'Regression' );
 		await expect( page.locator( '.ard-snapshots tbody tr' ) ).toHaveCount( 2 );
 
@@ -250,7 +250,9 @@ test.describe( 'Axle Runtime Doctor', () => {
 
 	test( 'the slow queries, history and settings tabs show and save what they should', async ( { page } ) => {
 		h.runChecks();
-		await page.goto( `${ PAGE }&tab=slow-queries` );
+		// Slow queries are a part of their check row now, not a tab of their own.
+		await page.goto( PAGE );
+		await page.locator( '#ard-check-db_slow_queries .ard-slow-details summary' ).click();
 		await expect( page.locator( '.ard-pages li' ).first() ).toBeVisible();
 		await expect( page.locator( '.ard-slow tbody tr' ).first() ).toBeVisible();
 		await expect( page.locator( '.ard-slow' ) ).toContainText( 'SELECT' );
@@ -259,7 +261,7 @@ test.describe( 'Axle Runtime Doctor', () => {
 		// Literals are stripped before anything is stored.
 		expect( JSON.stringify( digests ) ).not.toContain( "'admin'" );
 
-		await page.goto( `${ PAGE }&tab=history` );
+		await page.goto( `${ PAGE }&tab=compare&view=day` );
 		await expect( page.locator( '.ard-history-checks tr[data-check="php_branch"] .ard-spark-dot' ) ).toHaveCount( 1 );
 
 		await page.goto( `${ PAGE }&tab=settings` );
