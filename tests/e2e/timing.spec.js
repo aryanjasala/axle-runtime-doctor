@@ -34,6 +34,8 @@ test.describe( 'Which update made the site slower', () => {
 	} );
 
 	test( 'an update is logged, the next timing names it, the email names it, and Confirm it points at the plugin', async ( { page, browser } ) => {
+		// Probe rows other specs left behind (tokens that were issued and never used) are not this test's business.
+		wpEval( "global $wpdb; $wpdb->query( \"DELETE FROM {$wpdb->options} WHERE option_name LIKE 'axle_runtime_doctor_probe_%'\" );" );
 		h.seedSlowdown();
 
 		// The update went on the log with the versions before and after.
